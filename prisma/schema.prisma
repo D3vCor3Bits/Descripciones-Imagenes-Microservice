@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model IMAGEN {
+  idImagen    Int           @id @default(autoincrement()) @map("idImagen")
+  urlImagen   String        @map("urlImagen") @db.VarChar(1024)
+  fechaSubida DateTime      @default(now()) @map("fechaSubida") @db.Timestamptz(6)
+  grupo       String        @map("grupo") @db.VarChar(100)
+  idCuidador  Int           @map("idCuidador")
+  DESCRIPCION DESCRIPCION[]
+  GROUNDTRUTH GROUNDTRUTH[]
+  PUNTAJE     PUNTAJE[]
+
+  @@map("IMAGEN")
+}
+
+model GROUNDTRUTH {
+  idGroundtruth Int      @id @default(autoincrement()) @map("idGroundtruth")
+  texto         String   @map("texto")
+  fecha         DateTime @default(now()) @map("fecha") @db.Timestamptz(6)
+  idCuidador    Int      @map("idCuidador")
+  idImagen      Int      @map("idImagen")
+  IMAGEN        IMAGEN   @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("GROUNDTRUTH")
+}
+
+model SESION {
+  idSesion          Int           @id @default(autoincrement()) @map("idSesion")
+  idPaciente        Int           @map("idPaciente")
+  fechaInicio       DateTime      @default(now()) @map("fechaInicio") @db.Timestamptz(6)
+  estado            estado_sesion @default(en_curso) @map("estado")
+  sessionRecall     Float         @map("sessionRecall")
+  sessionComision   Float         @map("sessionComision")
+  sessionCoherencia Float         @map("sessionCoherencia")
+  sessionTotal      Float         @map("sessionTotal")
+  DESCRIPCION       DESCRIPCION[]
+
+  @@map("SESION")
+}
+
+model DESCRIPCION {
+  idDescripcion Int       @id @default(autoincrement()) @map("idDescripcion")
+  texto         String    @map("texto")
+  fecha         DateTime  @default(now()) @map("fecha") @db.Timestamptz(6)
+  idImagen      Int       @map("idImagen")
+  idPaciente    Int       @map("idPaciente")
+  idSesion      Int       @map("idSesion")
+  IMAGEN        IMAGEN    @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+  SESION        SESION    @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction)
+  PUNTAJE       PUNTAJE[]
+
+  @@map("DESCRIPCION")
+}
+
+model PUNTAJE {
+  idPuntaje         Int         @id @default(autoincrement()) @map("idPuntaje")
+  idDescripcion     Int         @map("idDescripcion")
+  idPaciente        Int         @map("idPaciente")
+  idImagen          Int         @map("idImagen")
+  rateOmision       Float       @map("rateOmision")
+  rateComision      Float       @map("rateComision")
+  rateExactitud     Float       @map("rateExactitud")
+  puntajeCoherencia Float       @map("puntajeCoherencia")
+  puntajeFluidez    Float       @map("puntajeFluidez")
+  puntajeTotal      Float       @map("puntajeTotal")
+  fechaCalculo      DateTime    @default(now()) @map("fechaCalculo") @db.Timestamptz(6)
+  DESCRIPCION       DESCRIPCION @relation(fields: [idDescripcion], references: [idDescripcion], onDelete: Cascade, onUpdate: NoAction)
+  IMAGEN            IMAGEN      @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("PUNTAJE")
+}
+
+enum estado_sesion {
+  en_curso
+  pendiente
+  completado
+
+  @@map("estado_sesion")
+}
