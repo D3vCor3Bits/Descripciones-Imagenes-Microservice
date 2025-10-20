@@ -2,7 +2,7 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/co
 import { PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
-import { CrearImagenDto } from './dto';
+import { CrearGroundTruthDto, CrearImagenDto } from './dto';
 import { RpcException } from '@nestjs/microservices';
 const streamifier = require('streamifier')
 
@@ -10,11 +10,16 @@ const streamifier = require('streamifier')
 export class DescripcionesImagenesService extends PrismaClient implements OnModuleInit{
   private readonly logger = new Logger('DescImagesService');
   
+  //Conectar con la base de datos de subase
   async onModuleInit() {
       await this.$connect();
       this.logger.log('Database connected')
   }
 
+
+  /*Función para cargar el archivo a cloudinary
+  vídeo de guía: https://www.youtube.com/watch?v=j6MlE50efCM
+  */
   async uploadFile(file: Express.Multer.File): Promise<CloudinaryResponse>{
     const buffer: Buffer | undefined = Buffer.isBuffer(file) ? file as unknown as Buffer : (file as any)?.buffer;
     if (!buffer) {
@@ -36,6 +41,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     })
   }
 
+
+  //Función para guardar en base de datos la imagen
   async create(crearImagenDto: CrearImagenDto) {
     try {
       const payload = crearImagenDto.imagenes[0];
@@ -62,8 +69,20 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     return `This action returns all descripcionesImagenes`;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} descripcionesImagene`;
+  async buscarImagen(id: number) {
+    try {
+      const imagen = await this.iMAGEN.findFirst({
+        where: {
+          idImagen: id
+        }
+      })
+      return imagen;
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: error
+      })
+    }
   }
 
   update(id: number, updateDescripcionesImageneDto: any) {
@@ -73,4 +92,38 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   remove(id: number) {
     return `This action removes a #${id} descripcionesImagene`;
   }
+
+
+
+
+  //DESCRIPCION
+
+
+  //GROUNDTRUH
+  async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
+      //Verificar idUsuario
+
+      //Verificar idImagen
+      const idImagen = crearGroundTruthDto.idImagen;
+      const imagen = await this.buscarImagen(idImagen);
+      if(!imagen){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "La imagen no existe en la base de datos"
+        });
+      }
+      
+      return await this.gROUNDTRUTH.create({
+        data:{
+          texto: crearGroundTruthDto.texto,
+          idCuidador: crearGroundTruthDto.idCuidador,
+          idImagen: crearGroundTruthDto.idImagen
+        }
+      })
+  }
+
+  //SESSIONS
+
+
+  //PUNTAJE
 }

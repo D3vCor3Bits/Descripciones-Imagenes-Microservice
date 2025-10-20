@@ -6,7 +6,7 @@ export class ImagenItemDto{
     @IsString()
     urlImagen: string;
 
-    fechaSubida: string;
+    fechaSubida: Date;
 
     @IsNumber()
     @IsPositive()

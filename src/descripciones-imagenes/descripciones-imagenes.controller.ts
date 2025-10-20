@@ -1,11 +1,12 @@
-import { Controller, UseInterceptors } from '@nestjs/common';
+import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
-import {FileInterceptor} from '@nestjs/platform-express'
-import { CrearImagenDto } from './dto';
+import { CrearGroundTruthDto, CrearImagenDto } from './dto';
 @Controller()
 export class DescripcionesImagenesController {
   constructor(private readonly descripcionesImagenesService: DescripcionesImagenesService) {}
+
+  //IMAGENES
 
   @MessagePattern({cmd:'uploadImageCloudinary'})
   async uploadImage(@Payload() payload: any){
@@ -51,9 +52,10 @@ export class DescripcionesImagenesController {
     return "holaaaa";
   }
 
-  @MessagePattern('findOneDescripcionesImagene')
-  findOne(@Payload() id: number) {
-    return this.descripcionesImagenesService.findOne(id);
+  //Buscar una imagen
+  @MessagePattern({cmd:'buscarImagen'})
+  buscarImagen(@Payload('id', ParseIntPipe) id: number) {
+    return this.descripcionesImagenesService.buscarImagen(id);
   }
 
   @MessagePattern('updateDescripcionesImagene')
@@ -65,4 +67,21 @@ export class DescripcionesImagenesController {
   remove(@Payload() id: number) {
     return this.descripcionesImagenesService.remove(id);
   }
+
+
+ 
+  //DESCRIPCION
+
+
+  //GROUNDTRUH
+  @MessagePattern({cmd:'crearGroundTruth'})
+  crearGroundTruth(@Payload() groundTruthDto: CrearGroundTruthDto){
+    return this.descripcionesImagenesService.crearGroundTruth(groundTruthDto);
+  }
+
+  //SESSIONS
+
+
+  //PUNTAJE
+
 }
