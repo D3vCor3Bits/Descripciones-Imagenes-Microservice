@@ -1,7 +1,7 @@
 import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
-import { CrearGroundTruthDto, CrearImagenDto } from './dto';
+import { CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
 @Controller()
 export class DescripcionesImagenesController {
   constructor(private readonly descripcionesImagenesService: DescripcionesImagenesService) {}
@@ -47,6 +47,9 @@ export class DescripcionesImagenesController {
   }
 
 
+/* 
+
+*/  //
   @MessagePattern({cmd:'findAllDescripcionesImagenes'})
   findAll() {
     return "holaaaa";
@@ -73,14 +76,39 @@ export class DescripcionesImagenesController {
   //DESCRIPCION
 
 
-  //GROUNDTRUH
+  /* ----------- GROUNDTRUH ----------- */
+  
+  //MessagePattern para crear groundtruth
   @MessagePattern({cmd:'crearGroundTruth'})
   crearGroundTruth(@Payload() groundTruthDto: CrearGroundTruthDto){
     return this.descripcionesImagenesService.crearGroundTruth(groundTruthDto);
   }
 
-  //SESSIONS
+  //MessagePattern para buscar groundtruth
+  @MessagePattern({cmd:'buscarGroundTruth'})
+  buscarGroundTruth(@Payload('id', ParseIntPipe) id: number){
+    return this.descripcionesImagenesService.buscarGroundTruth(id);
+  }
 
+  //MessagePattern para buscar groundTruth por id imágen
+  @MessagePattern({cmd:'buscarGroundTruthIdImagen'})
+  buscarGroundTruthIdImagen(@Payload('id', ParseIntPipe) id: number){
+    return this.descripcionesImagenesService.buscarGroundTruthIdImagen(id);
+  }
+
+  //---------------SESSIONS---------------
+  
+  //MessagePattern para crear la sesión
+  @MessagePattern({cmd:'crearSesion'})
+  crearSesion(@Payload() crearSesion: CrearSesionDto){
+    return this.descripcionesImagenesService.crearSesion(crearSesion);
+  }
+
+  //MessagePattern para buscar sesiones
+  @MessagePattern({cmd:'listarSesiones'})
+  listarSesiones(@Payload() sesionPaginationDto: SesionPaginationDto){
+    return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto);
+  }
 
   //PUNTAJE
 

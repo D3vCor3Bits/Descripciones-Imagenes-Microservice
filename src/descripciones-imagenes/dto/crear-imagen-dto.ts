@@ -1,4 +1,4 @@
-import {IsNumber, IsString, IsPositive, IsArray, ArrayMinSize, ValidateNested} from 'class-validator';
+import {IsArray, ArrayMinSize, ValidateNested} from 'class-validator';
 import {Type} from 'class-transformer';
 import { ImagenItemDto } from './imagen-item.dto';
 

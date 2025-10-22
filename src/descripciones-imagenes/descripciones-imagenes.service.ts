@@ -2,7 +2,7 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/co
 import { PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
-import { CrearGroundTruthDto, CrearImagenDto } from './dto';
+import { CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
 import { RpcException } from '@nestjs/microservices';
 const streamifier = require('streamifier')
 
@@ -65,24 +65,29 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
   }
 
+  //CON PAGINACIÓN
   findAll() {
     return `This action returns all descripcionesImagenes`;
   }
 
+  //Buscar imágen por id
   async buscarImagen(id: number) {
-    try {
+
       const imagen = await this.iMAGEN.findFirst({
         where: {
           idImagen: id
         }
       })
+
+      if(!imagen){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "Imagen no encontrada en la base de datos"
+        })
+      }
+
       return imagen;
-    } catch (error) {
-      throw new RpcException({
-        status: HttpStatus.NOT_FOUND,
-        message: error
-      })
-    }
+
   }
 
   update(id: number, updateDescripcionesImageneDto: any) {
@@ -101,7 +106,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   //GROUNDTRUH
   async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
-      //Verificar idUsuario
+      //TODO: Verificar idUsuario
 
       //Verificar idImagen
       const idImagen = crearGroundTruthDto.idImagen;
@@ -122,8 +127,86 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       })
   }
 
-  //SESSIONS
+  //Buscar GroundTruth por id
+  async buscarGroundTruth(id: number){
+      const idGt = id;
+      const gt = await this.gROUNDTRUTH.findFirst({
+        where: {
+          idGroundtruth: idGt
+        }
+      })
+      if(!gt){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "Verdad absoluta no encontrada"
+        })
+      }
+      console.log("GT: "+ gt)
+
+      return gt;
+
+  }
+
+  //Buscar GroundTruth dado el id de una imágen
+  async buscarGroundTruthIdImagen(id: number){
+      const idImagen = id;
+      const gt = await this.gROUNDTRUTH.findFirst({
+        where: {
+          idImagen: idImagen
+        }
+      })
+      if(!gt){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "Verdad absoluta no encontrada"
+        })
+      }
+
+      return gt;
+    }
+  //TODO: Buscar groundtruths con paginación
+
+  //Actualizar groudnTruth
+
+
+  //Eliminar GroundTruth
+
+
+  //-------------SESSIONS--------------
+
+  //Crear sesión
+  async crearSesion(crearSesionDto: CrearSesionDto){
+    try {
+      //Verificar existencia del idPaciente en la bd de usuarios
+      const paciente = null; 
+      //Validación del paciente
+      //---
+
+      const sesion = await this.sESION.create({
+        data:{
+          idPaciente: crearSesionDto.idPaciente,
+          sessionCoherencia: 0,
+          sessionComision: 0,
+          sessionRecall: 0,
+          sessionTotal: 0
+        }
+      })
+
+      return sesion;
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error
+      })
+    }
+  }
+
+  //Buscar sesiones
+  async listarSesiones(sesionPaginationDto: SesionPaginationDto){
+    return null;
+  }
 
 
   //PUNTAJE
+
 }
