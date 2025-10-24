@@ -20,12 +20,14 @@ model DESCRIPCION {
 }
 
 model GROUNDTRUTH {
-  idGroundtruth Int      @id @default(autoincrement())
-  texto         String
-  fecha         DateTime @default(now()) @db.Timestamptz(6)
-  idCuidador    Int
-  idImagen      Int
-  IMAGEN        IMAGEN   @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+  idGroundtruth         Int      @id @default(autoincrement())
+  texto                 String
+  fecha                 DateTime @default(now()) @db.Timestamptz(6)
+  idImagen              Int
+  palabrasClave         String[]
+  preguntasGuiaCuidador String[]
+  preguntasGuiaPaciente String[]
+  IMAGEN                IMAGEN   @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model IMAGEN {
@@ -38,24 +40,24 @@ model IMAGEN {
   formato       String?
   DESCRIPCION   DESCRIPCION[]
   GROUNDTRUTH   GROUNDTRUTH[]
-  PUNTAJE       PUNTAJE[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model PUNTAJE {
-  idPuntaje         Int         @id @default(autoincrement())
-  idDescripcion     Int
-  idPaciente        Int
-  idImagen          Int
-  rateOmision       Float
-  rateComision      Float
-  rateExactitud     Float
-  puntajeCoherencia Float
-  puntajeFluidez    Float
-  puntajeTotal      Float
-  fechaCalculo      DateTime    @default(now()) @db.Timestamptz(6)
-  DESCRIPCION       DESCRIPCION @relation(fields: [idDescripcion], references: [idDescripcion], onDelete: Cascade, onUpdate: NoAction)
-  IMAGEN            IMAGEN      @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+  idPuntaje             Int         @id @default(autoincrement())
+  idDescripcion         Int
+  rateOmision           Float
+  rateComision          Float
+  rateExactitud         Float
+  puntajeCoherencia     Float
+  puntajeFluidez        Float
+  puntajeTotal          Float
+  fechaCalculo          DateTime    @default(now()) @db.Timestamptz(6)
+  detallesOmitidos      String[]
+  palabrasClaveOmitidas String[]
+  aciertos              String[]
+  conclusion            String?
+  DESCRIPCION           DESCRIPCION @relation(fields: [idDescripcion], references: [idDescripcion], onDelete: Cascade, onUpdate: NoAction)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -68,6 +70,7 @@ model SESION {
   sessionComision   Float
   sessionCoherencia Float
   sessionTotal      Float
+  conclusion        String?
   DESCRIPCION       DESCRIPCION[]
 }
 

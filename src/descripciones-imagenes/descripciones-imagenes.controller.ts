@@ -1,7 +1,7 @@
 import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
-import { CrearGroundTruthDto, CrearImagenDto } from './dto';
+import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
 @Controller()
 export class DescripcionesImagenesController {
   constructor(private readonly descripcionesImagenesService: DescripcionesImagenesService) {}
@@ -71,9 +71,16 @@ export class DescripcionesImagenesController {
 
  
   //DESCRIPCION
+  //------------ DESCRIPCION -------------
 
+  @MessagePattern({cmd:'crearDescripcion'})
+  crearDescripcion(@Payload() descripcionDto: CrearDescriptionDto){
+    return this.descripcionesImagenesService.crearDescripcion(descripcionDto);
+  }
 
-  //GROUNDTRUH
+  /* ----------- GROUNDTRUH ----------- */
+  
+  //MessagePattern para crear groundtruth
   @MessagePattern({cmd:'crearGroundTruth'})
   crearGroundTruth(@Payload() groundTruthDto: CrearGroundTruthDto){
     return this.descripcionesImagenesService.crearGroundTruth(groundTruthDto);
@@ -81,7 +88,17 @@ export class DescripcionesImagenesController {
 
   //SESSIONS
 
+  //MessagePattern para crear la sesión
+  @MessagePattern({cmd:'crearSesion'})
+  crearSesion(@Payload() crearSesion: CrearSesionDto){
+    return this.descripcionesImagenesService.crearSesion(crearSesion);
+  }
 
+  //MessagePattern para buscar sesiones
+  @MessagePattern({cmd:'listarSesiones'})
+  listarSesiones(@Payload() sesionPaginationDto: SesionPaginationDto){
+    return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto);
+  }
   //PUNTAJE
 
 }

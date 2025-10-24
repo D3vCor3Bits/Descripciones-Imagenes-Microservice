@@ -2,8 +2,9 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/co
 import { PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
-import { CrearGroundTruthDto, CrearImagenDto } from './dto';
+import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
 import { RpcException } from '@nestjs/microservices';
+import { crearPuntajeDto } from './dto/crear-puntaje.dto';
 const streamifier = require('streamifier')
 
 @Injectable()
@@ -95,11 +96,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
 
 
+  // -------------- GROUNDTRUH -------------------
 
-  //DESCRIPCION
-
-
-  //GROUNDTRUH
   async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
       //Verificar idUsuario
 
@@ -116,14 +114,210 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       return await this.gROUNDTRUTH.create({
         data:{
           texto: crearGroundTruthDto.texto,
-          idCuidador: crearGroundTruthDto.idCuidador,
           idImagen: crearGroundTruthDto.idImagen
         }
       })
   }
 
-  //SESSIONS
+  //Buscar GroundTruth por id
+  async buscarGroundTruth(id: number){
+      const idGt = id;
+      const gt = await this.gROUNDTRUTH.findFirst({
+        where: {
+          idGroundtruth: idGt
+        }
+      })
+      if(!gt){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "Verdad absoluta no encontrada"
+        })
+      }
+      console.log("GT: "+ gt)
+
+      return gt;
+
+  }
+
+  //Buscar GroundTruth dado el id de una imágen
+  async buscarGroundTruthIdImagen(id: number){
+      const idImagen = id;
+      const gt = await this.gROUNDTRUTH.findFirst({
+        where: {
+          idImagen: idImagen
+        }
+      })
+      if(!gt){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "Verdad absoluta no encontrada"
+        })
+      }
+
+      return gt;
+    }
+  //TODO: Buscar groundtruths con paginación
+
+  //Actualizar groudnTruth
 
 
-  //PUNTAJE
+  //Eliminar GroundTruth
+
+
+  //-------------SESSIONS--------------
+
+  //Crear sesión
+  async crearSesion(crearSesionDto: CrearSesionDto){
+    try {
+      //Verificar existencia del idPaciente en la bd de usuarios
+      const paciente = null; 
+      //Validación del paciente
+      //---
+
+      const sesion = await this.sESION.create({
+        data:{
+          idPaciente: crearSesionDto.idPaciente,
+          sessionCoherencia: 0,
+          sessionComision: 0,
+          sessionRecall: 0,
+          sessionTotal: 0,
+          conclusion: "No se ha proporcionado todavía"
+        }
+      })
+
+      return sesion;
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error
+      })
+    }
+  }
+
+  //Buscar sesiones
+  async listarSesiones(sesionPaginationDto: SesionPaginationDto){
+    const totalPages = await this.sESION.count({
+      where: {
+        estado: sesionPaginationDto.estado_sesion
+      }
+    })
+
+    const currentPage = Number(sesionPaginationDto.page);
+    const perPage = Number(sesionPaginationDto.limit);
+
+    return {
+      data: await this.sESION.findMany({
+        skip: (currentPage-1)*perPage,
+        take: perPage,
+        where: {
+          estado: sesionPaginationDto.estado_sesion
+        }
+      }),
+      meta: {
+        total: totalPages,
+        page: currentPage,
+        lastPage: Math.ceil(totalPages/perPage)
+      }
+    }
+
+  }
+
+
+  async buscarSesion(id: number){
+    const sesion = await this.sESION.findFirst({
+      where: {
+        idSesion: id
+      }
+    })
+    if(!sesion){
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: "Sesión no encontrada en la base de datos"
+      })
+    }
+  }
+
+  //--------------- PUNTAJE ------------------
+  async crearPuntaje(crearPuntajeDto: crearPuntajeDto){
+    const idDescripcion = crearPuntajeDto.idDescripcion;
+    await this.buscarDescripcion(idDescripcion);
+
+    try {
+      const puntaje = await this.pUNTAJE.create({
+      data: {
+        idDescripcion: idDescripcion,
+        rateOmision: crearPuntajeDto.rateOmision,
+        rateComision: crearPuntajeDto.rateComision,
+        rateExactitud: crearPuntajeDto.rateExactitud,
+        puntajeCoherencia: crearPuntajeDto.puntajeCoherencia,
+        puntajeFluidez: crearPuntajeDto.puntajeFluidez,
+        puntajeTotal: crearPuntajeDto.puntajeTotal,
+        detallesOmitidos: crearPuntajeDto.detallesOmitidos,
+        palabrasClaveOmitidas: crearPuntajeDto.palabrasClaveOmitidas,
+        aciertos: crearPuntajeDto.aciertos,
+        conclusion: crearPuntajeDto.conclusion
+      }
+    })
+
+    return puntaje;
+
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error
+      })  
+    }
+  }
+
+
+ // --------------- DESCRIPCION -----------------
+
+  async crearDescripcion(crearDescripcionDto: CrearDescriptionDto){
+
+    //Validar idPaciente
+    const idPaciente = crearDescripcionDto.idPaciente;
+
+    //Validación idImagen
+    const idImagen = crearDescripcionDto.idImagen;
+    await this.buscarImagen(idImagen);
+
+    const idSesion = crearDescripcionDto.idSesion;
+    await this.buscarSesion(idSesion);
+
+    try {
+      const descripcion = await this.dESCRIPCION.create({
+      data: {
+        texto: crearDescripcionDto.texto,
+        idPaciente: crearDescripcionDto.idPaciente,
+        idImagen: crearDescripcionDto.idImagen,
+        idSesion: crearDescripcionDto.idSesion
+      }
+    })
+
+    return descripcion;
+     
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error
+      })
+    }
+  }
+
+  async buscarDescripcion(id: number){
+    const descripcion = await this.dESCRIPCION.findFirst({
+      where:{
+        idDescripcion: id
+      }
+    })
+
+    if(!descripcion){
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: "Descripcion no encontrada en la base de datos"
+      })
+    }
+
+    return descripcion;
+  }
 }
