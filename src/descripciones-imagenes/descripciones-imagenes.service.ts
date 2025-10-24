@@ -5,19 +5,36 @@ import { CloudinaryResponse } from './imageProvider/cloudinary-response';
 import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
 import { RpcException } from '@nestjs/microservices';
 import { crearPuntajeDto } from './dto/crear-puntaje.dto';
+import {GenerativeModel, GoogleGenerativeAI} from '@google/generative-ai'
+import { envs } from 'src/config';
 const streamifier = require('streamifier')
+
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 @Injectable()
 export class DescripcionesImagenesService extends PrismaClient implements OnModuleInit{
   private readonly logger = new Logger('DescImagesService');
-  
+  private readonly googleAI: GoogleGenerativeAI;
+  private readonly model: GenerativeModel;
+
+  constructor(){
+    super();
+    const geminiApiKey = envs.geminiApiKey;
+    this.googleAI = new GoogleGenerativeAI(geminiApiKey);4
+    this.model = this.googleAI.getGenerativeModel({
+      model: GEMINI_MODEL,
+      generationConfig:{
+        responseMimeType: "application/json"
+      }
+    })
+  }
+
+
   //Conectar con la base de datos de subase
   async onModuleInit() {
       await this.$connect();
       this.logger.log('Database connected')
   }
-
-
   /*Función para cargar el archivo a cloudinary
   vídeo de guía: https://www.youtube.com/watch?v=j6MlE50efCM
   */

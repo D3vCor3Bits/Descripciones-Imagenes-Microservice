@@ -99,6 +99,7 @@ export class DescripcionesImagenesController {
   listarSesiones(@Payload() sesionPaginationDto: SesionPaginationDto){
     return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto);
   }
+  
   //PUNTAJE
 
 }
