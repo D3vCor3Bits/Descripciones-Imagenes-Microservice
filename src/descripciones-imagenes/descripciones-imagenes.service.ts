@@ -2,31 +2,26 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/co
 import { PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
-import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
+import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, GetAIresponseDto, SesionPaginationDto } from './dto';
 import { RpcException } from '@nestjs/microservices';
 import { crearPuntajeDto } from './dto/crear-puntaje.dto';
-import {GenerativeModel, GoogleGenerativeAI} from '@google/generative-ai'
+import { GoogleGenAI, Type} from '@google/genai'
 import { envs } from 'src/config';
+import { SalidaGeminiInterface } from 'src/interfaces/salida-ai.interface';
+
 const streamifier = require('streamifier')
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 @Injectable()
 export class DescripcionesImagenesService extends PrismaClient implements OnModuleInit{
   private readonly logger = new Logger('DescImagesService');
-  private readonly googleAI: GoogleGenerativeAI;
-  private readonly model: GenerativeModel;
+  private readonly gemini: GoogleGenAI
 
   constructor(){
     super();
     const geminiApiKey = envs.geminiApiKey;
-    this.googleAI = new GoogleGenerativeAI(geminiApiKey);4
-    this.model = this.googleAI.getGenerativeModel({
-      model: GEMINI_MODEL,
-      generationConfig:{
-        responseMimeType: "application/json"
-      }
-    })
+    this.gemini = new GoogleGenAI({apiKey: geminiApiKey});
   }
 
 
@@ -298,6 +293,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     const idImagen = crearDescripcionDto.idImagen;
     await this.buscarImagen(idImagen);
 
+    //Validación idSesion
     const idSesion = crearDescripcionDto.idSesion;
     await this.buscarSesion(idSesion);
 
@@ -311,6 +307,25 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       }
     })
 
+    //Buscamos groundTruth
+    const groundTruthDelaImagen = await this.gROUNDTRUTH.findFirst({
+      select:{
+        texto: true
+      },
+      where: {
+        idImagen: idImagen
+      }
+    })
+
+    if(!groundTruthDelaImagen){
+      throw new RpcException({
+        status: HttpStatus.CONFLICT,
+        message: "No se pudo acceder al groundTruth de la imagen"
+      })
+    }
+
+    const resultadoComparativa = await this.comparacionDescripcionGroundTruth(descripcion.idDescripcion, descripcion.texto, groundTruthDelaImagen.texto)
+
     return descripcion;
      
     } catch (error) {
@@ -320,6 +335,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       })
     }
   }
+
+
 
   async buscarDescripcion(id: number){
     const descripcion = await this.dESCRIPCION.findFirst({
@@ -336,5 +353,109 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
 
     return descripcion;
+  }
+
+
+  // --------- GEMINI AI FUNCTIONS -------
+
+  async comparacionDescripcionGroundTruth(idDescripcion: number, descripcionPaciente: string, groundTruth: string): Promise<SalidaGeminiInterface>{
+    const prompt = this.generarPrompt(descripcionPaciente, groundTruth);
+    try {
+      //CONSTRUCCIÓN DEL PROMPT Y PARÁMETROS
+      const response = await this.gemini.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt,
+        config:{
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              rateOmision: { type: Type.NUMBER },
+              rateComision: { type: Type.NUMBER },
+              rateExactitud: { type: Type.NUMBER },
+              puntajeCoherencia: { type: Type.NUMBER },
+              puntajeFluidez: { type: Type.NUMBER },
+              puntajeTotal: { type: Type.NUMBER },
+              detallesOmitidos: { type: Type.ARRAY, items: { type: Type.STRING } },
+              palabrasClaveOmitidas: { type: Type.ARRAY, items: { type: Type.STRING } },
+              aciertos: { type: Type.ARRAY, items: { type: Type.STRING } },
+              conclusion: { type: Type.STRING },
+            },
+            required: [
+              "rateOmision",
+              "rateComision",
+              "rateExactitud",
+              "puntajeCoherencia",
+              "puntajeFluidez",
+              "puntajeTotal",
+              "detallesOmitidos",
+              "palabrasClaveOmitidas",
+              "aciertos",
+              "conclusion",
+            ],
+          },
+        }
+      })
+
+      // Extraer y parsear la respuesta JSON
+      const jsonResponse = response.text?.trim();
+      if(!jsonResponse){
+        throw new RpcException({
+          status: HttpStatus.BAD_GATEWAY,
+          message: "No hubo respuesta por parte de Gemini AI"          
+        })
+      }
+      const result: SalidaGeminiInterface = JSON.parse(jsonResponse)
+      
+      //PERSISTENCIA EN BASE DE DATOS
+      await this.pUNTAJE.create({
+        data:{
+          idDescripcion: idDescripcion,
+          rateOmision: result.rateOmision,
+          rateComision: result.rateComision,
+          rateExactitud: result.rateExactitud,
+          puntajeCoherencia: result.puntajeCoherencia,
+          puntajeFluidez: result.puntajeFluidez,
+          puntajeTotal: result.puntajeTotal,
+          detallesOmitidos: result.detallesOmitidos,
+          palabrasClaveOmitidas: result.palabrasClaveOmitidas,
+          aciertos: result.aciertos,
+          conclusion: result.conclusion
+        }
+      })    
+
+      //MANEJAR ALERTAS EN CASO DE QUE UN VALOR O VALORES SEAN MALOS
+      
+      return result;
+    } catch (error) {
+      this.logger.error('Error en la comparación con Gemini:', error);
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al procesar la solicitud con el modelo de IA.',
+        details: error.message,
+      });
+    }
+  }
+
+  private generarPrompt(descripcionPaciente: string, groundTruth: string){
+    return `
+      Eres un evaluador experto. Tu tarea es comparar la 'Descripción del Paciente' con el 'Ground Truth' y generar un análisis de similitud en formato JSON.
+
+      Criterios de Evaluación:
+      1. Evalúa la presencia de elementos clave de la imagen (personas, objetos, acciones).
+      2. Evalúa la precisión y exactitud de los detalles.
+      3. Ignora errores menores de ortografía o gramática a menos que cambien el significado.
+      4. Asigna una 'matchScore' de 0 (ninguna similitud) a 100 (descripciones idénticas en contenido).
+
+      ---
+      Ground Truth (GT):
+      "${groundTruth}"
+
+      Descripción del Paciente (DP):
+      "${descripcionPaciente}"
+
+      ---
+      Genera el JSON estrictamente siguiendo la estructura del esquema provisto, sin texto adicional.
+    `;
   }
 }

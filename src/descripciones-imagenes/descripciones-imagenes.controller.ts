@@ -2,6 +2,7 @@ import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
 import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
+import { GetAIresponseDto } from './dto/get-ai-response.dto';
 @Controller()
 export class DescripcionesImagenesController {
   constructor(private readonly descripcionesImagenesService: DescripcionesImagenesService) {}
@@ -69,15 +70,6 @@ export class DescripcionesImagenesController {
   }
 
 
- 
-  //DESCRIPCION
-  //------------ DESCRIPCION -------------
-
-  @MessagePattern({cmd:'crearDescripcion'})
-  crearDescripcion(@Payload() descripcionDto: CrearDescriptionDto){
-    return this.descripcionesImagenesService.crearDescripcion(descripcionDto);
-  }
-
   /* ----------- GROUNDTRUH ----------- */
   
   //MessagePattern para crear groundtruth
@@ -101,5 +93,19 @@ export class DescripcionesImagenesController {
   }
   
   //PUNTAJE
+
+
+
+  //------------ DESCR IPCION -------------
+
+  @MessagePattern({cmd:'crearDescripcion'})
+  crearDescripcion(@Payload() descripcionDto: CrearDescriptionDto){
+    return this.descripcionesImagenesService.crearDescripcion(descripcionDto);
+  }
+
+  @MessagePattern({cmd:'geminiResponse'})
+  geminiResponse(@Payload() aIResponseDto: GetAIresponseDto){
+    return null
+  }
 
 }
