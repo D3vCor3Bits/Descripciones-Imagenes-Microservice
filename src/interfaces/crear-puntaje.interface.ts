@@ -1,7 +1,8 @@
 
+export interface CrearPuntajeInterface{
 
-export interface SalidaGeminiInterface{    
-
+    idDescripcion: number
+    
     rateOmision: number
 
     rateComision: number
@@ -9,7 +10,7 @@ export interface SalidaGeminiInterface{
     rateExactitud: number
 
     puntajeCoherencia: number
- 
+
     puntajeFluidez: number
 
     puntajeTotal: number

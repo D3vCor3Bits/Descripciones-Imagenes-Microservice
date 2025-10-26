@@ -18,7 +18,7 @@ export class CrearSesionDto{
 
     @IsNumber()
     @IsOptional()
-    sessionRecall: number
+    sessionRecall: number 
 
     @IsNumber()
     @IsOptional()
@@ -30,9 +30,17 @@ export class CrearSesionDto{
 
     @IsNumber()
     @IsOptional()
+    sessionFluidez: number
+
+    @IsNumber()
+    @IsOptional()
     sessionTotal: number
 
     @IsString()
     @IsOptional()
-    conclusion: string
+    conclusionTecnica: string
+
+    @IsString()
+    @IsOptional()
+    conclusionNormal: string
 }

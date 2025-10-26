@@ -11,7 +11,7 @@ model DESCRIPCION {
   idDescripcion Int       @id @default(autoincrement())
   texto         String
   fecha         DateTime  @default(now()) @db.Timestamptz(6)
-  idImagen      Int
+  idImagen      Int       @unique
   idPaciente    Int
   idSesion      Int
   IMAGEN        IMAGEN    @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
@@ -38,7 +38,7 @@ model IMAGEN {
   idAsset       String?
   idPublicImage String?
   formato       String?
-  DESCRIPCION   DESCRIPCION[]
+  DESCRIPCION   DESCRIPCION?
   GROUNDTRUTH   GROUNDTRUTH[]
 }
 
@@ -57,6 +57,7 @@ model PUNTAJE {
   palabrasClaveOmitidas String[]
   aciertos              String[]
   conclusion            String?
+  elementosComision     String[]
   DESCRIPCION           DESCRIPCION @relation(fields: [idDescripcion], references: [idDescripcion], onDelete: Cascade, onUpdate: NoAction)
 }
 
@@ -70,8 +71,23 @@ model SESION {
   sessionComision   Float
   sessionCoherencia Float
   sessionTotal      Float
-  conclusion        String?
+  conclusionTecnica String?
+  sessionFluidez    Float         @default(0)
+  conclusionNormal  String        @default("")
   DESCRIPCION       DESCRIPCION[]
+}
+
+
+model VW_PromediosPorSesion {
+  idSesion              Int     @id           @map("idSesion")
+  PromedioOmision       Float?  @map("PromedioOmision")
+  PromedioComision      Float?  @map("PromedioComision")
+  PromedioExactitud     Float?  @map("PromedioExactitud")
+  PromedioCoherencia    Float?  @map("PromedioCoherencia")
+  PromedioFluidez       Float?  @map("PromedioFluidez")
+  PuntajeTotalPromedio  Float?  @map("PuntajeTotalPromedio")
+
+  @@map("VW_PromediosPorSesion") 
 }
 
 enum estado_sesion {
@@ -79,3 +95,4 @@ enum estado_sesion {
   pendiente
   completado
 }
+

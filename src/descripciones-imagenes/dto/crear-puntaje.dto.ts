@@ -1,7 +1,7 @@
 import { IsArray, IsNumber, IsOptional, IsPositive, IsString } from "class-validator";
 
 
-export class crearPuntajeDto{
+export class CrearPuntajeDto{
 
     @IsNumber()
     @IsPositive()
@@ -38,11 +38,14 @@ export class crearPuntajeDto{
     palabrasClaveOmitidas: string[]
 
     @IsArray()
+    elementosComision: string[]
+
+    @IsArray()
     aciertos: string[]
 
     @IsString()
     conclusion: string
 
     @IsOptional()
-    fechaCalculado: Date
+    fechaCalculado?: Date
 }
