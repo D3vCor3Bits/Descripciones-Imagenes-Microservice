@@ -49,6 +49,9 @@ export class DescripcionesImagenesController {
   }
 
 
+/* 
+
+*/  //
   @MessagePattern({cmd:'findAllDescripcionesImagenes'})
   findAll() {
     return "holaaaa";

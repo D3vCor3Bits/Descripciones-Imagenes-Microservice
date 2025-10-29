@@ -78,10 +78,12 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
   }
 
+  //CON PAGINACIÓN
   findAll() {
     return `This action returns all descripcionesImagenes`;
   }
 
+  //Buscar imágen por id
   async buscarImagen(id: number) {
     const imagen = await this.iMAGEN.findFirst({
       where: {
@@ -111,7 +113,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   // -------------- GROUNDTRUH -------------------
 
   async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
-      //Verificar idUsuario
+      //TODO: Verificar idUsuario
 
       //Verificar idImagen
       const idImagen = crearGroundTruthDto.idImagen;
