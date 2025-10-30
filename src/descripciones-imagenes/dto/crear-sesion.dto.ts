@@ -26,6 +26,10 @@ export class CrearSesionDto{
 
     @IsNumber()
     @IsOptional()
+    sessionOmision: number
+
+    @IsNumber()
+    @IsOptional()
     sessionCoherencia: number
 
     @IsNumber()

@@ -1,13 +1,14 @@
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { estado_sesion, Prisma, PrismaClient } from '@prisma/client';
+import { estado_sesion, PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
-import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
+import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
 import { RpcException } from '@nestjs/microservices';
 import { GoogleGenAI, Type} from '@google/genai'
 import { envs } from 'src/config';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
 import { SalidaConclusionSesionInterface,CrearPuntajeInterface, SalidaGeminiInterface } from 'src/interfaces';
+import { calcularDiferenciaHoraria } from './validationFunctions/hora-subida';
 
 const streamifier = require('streamifier')
 
@@ -25,11 +26,17 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
 
-  //Conectar con la base de datos de subase
+  //----Conectar con la base de datos de supabase----
   async onModuleInit() {
       await this.$connect();
       this.logger.log('Database connected')
   }
+
+
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------IMÁGENES--------------------------------*/
+  /*-------------------------------------------------------------------------*/
+
   /*Función para cargar el archivo a cloudinary
   vídeo de guía: https://www.youtube.com/watch?v=j6MlE50efCM
   */
@@ -55,7 +62,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
 
-  //Función para guardar en base de datos la imagen
+  /*FUNCIÓN PARA GUARDAR EN BASE DE DATOS LA IMAGEN*/
+
   async create(crearImagenDto: CrearImagenDto) {
     try {
       const payload = crearImagenDto.imagenes[0];
@@ -78,9 +86,35 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
   }
 
-  findAll() {
-    return `This action returns all descripcionesImagenes`;
+  /* LISTAR IMÁGENES DE UN CUIDADOR*/
+
+  async listarImagenesCuidador(imagenesPaginationDto: ImagenPaginationDto) {
+    const totalPages = await this.iMAGEN.count({
+    where: {
+      idCuidador: imagenesPaginationDto.cuidadorId 
+    }
+  })
+
+    const currentPage = Number(imagenesPaginationDto.page);
+    const perPage = Number(imagenesPaginationDto.limit);
+
+    return {
+      data: await this.iMAGEN.findMany({
+        skip: (currentPage-1)*perPage,
+        take: perPage,
+        where: {
+          idCuidador: imagenesPaginationDto.cuidadorId
+        }
+      }),
+      meta: {
+        total: totalPages,
+        page: currentPage,
+        lastPage: Math.ceil(totalPages/perPage)
+      }
+    }
   }
+
+  /*BUSCAR IMAGEN*/
 
   async buscarImagen(id: number) {
     const imagen = await this.iMAGEN.findFirst({
@@ -98,17 +132,42 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     return imagen;
   }
 
+  //TODO: MIRAR SI SE HACE ACTUALIZAR IMAGEN
   update(id: number, updateDescripcionesImageneDto: any) {
     return `This action updates a #${id} descripcionesImagene`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} descripcionesImagene`;
+  /* ELIMINAR IMAGEN */
+  async eliminarImagen(id: number) {
+    const imagen = await this.buscarImagen(id);
+
+    const fechaSubida = imagen.fechaSubida;
+
+    const result = calcularDiferenciaHoraria(fechaSubida);
+    if (result.diffMs > result.HOURS_24_MS) {
+      throw new RpcException({
+        status: HttpStatus.FORBIDDEN,
+        message: 'No es posible eliminar la imagen: han pasado más de 24 horas desde la subida'
+      });
+    }
+
+    await this.iMAGEN.delete({
+      where:{
+        idImagen: id
+      }
+    });
+    return {
+      message: "Imagen eliminada correctamente"
+    };
   }
 
 
 
-  // -------------- GROUNDTRUH -------------------
+  /*-------------------------------------------------------------------------*/
+  /*------------------------------GROUNDTRUTH--------------------------------*/
+  /*-------------------------------------------------------------------------*/
+
+  /* FUNCIÓN PARA CREAR GROUNDTRUTH*/
 
   async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
       //Verificar idUsuario
@@ -131,7 +190,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       })
   }
 
-  //Buscar GroundTruth por id
+  /*FUNCIÓN PARA BUSCAR GROUNDTRUTH POR ID*/
   async buscarGroundTruth(id: number){
       const idGt = id;
       const gt = await this.gROUNDTRUTH.findFirst({
@@ -151,7 +210,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   }
 
-  //Buscar GroundTruth dado el id de una imágen
+  /*FUNCIÓN PARA BUSCAR GROUNDTRUTH DADO EL ID DE UNA IMAGEN*/
+
   async buscarGroundTruthIdImagen(id: number){
       const idImagen = id;
       const gt = await this.gROUNDTRUTH.findFirst({
@@ -168,17 +228,58 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
       return gt;
     }
-  //TODO: Buscar groundtruths con paginación
 
-  //Actualizar groudnTruth
+  /*FUNCIÓN PARA ACTUALIZAR GROUNDTRUTH*/
+  async actualizarGroundTruth(id: number, actualizarGroundTruthDto: ActualizarGroundTruthDto){
+    const {id:__, ...data} = actualizarGroundTruthDto;
+
+    const groundTruth = await this.buscarGroundTruth(id);
+    const fechaSubida = groundTruth.fecha;
+    const result = calcularDiferenciaHoraria(fechaSubida);
+    if (result.diffMs > result.HOURS_24_MS) {
+      throw new RpcException({
+        status: HttpStatus.FORBIDDEN,
+        message: 'No es posible actualizar la descripción de verdad absoluta: han pasado más de 24 horas desde la subida'
+      });
+    }
+
+    return this.gROUNDTRUTH.update({
+      where: {
+        idGroundtruth: id
+      },
+      data: data
+    })
+  }
+
+  /*FUNCIÓN PARA ELIMINAR GROUNDTRUTH*/
+  async eliminarGroundTruth(id: number){
+   const groundTruth = await this.buscarGroundTruth(id);
+
+    const fechaSubida = groundTruth.fecha;
+    const result = calcularDiferenciaHoraria(fechaSubida);
+    if (result.diffMs > result.HOURS_24_MS) {
+      throw new RpcException({
+        status: HttpStatus.FORBIDDEN,
+        message: 'No es posible eliminar la descripción de verdad absoluta: han pasado más de 24 horas desde la subida'
+      });
+    }
 
 
-  //Eliminar GroundTruth
+    await this.gROUNDTRUTH.delete({
+      where:{
+        idGroundtruth: id
+      }
+    });
+    return {
+      message: "Verdad absoluta eliminada correctamente"
+    };
+  }
 
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------SESIONES--------------------------------*/
+  /*-------------------------------------------------------------------------*/
 
-  //-------------SESSIONS--------------
-
-  //Crear sesión
+  /* CREAR SESIÓN */
   async crearSesion(crearSesionDto: CrearSesionDto){
     try {
       //Verificar existencia del idPaciente en la bd de usuarios
@@ -191,6 +292,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           idPaciente: crearSesionDto.idPaciente,
           sessionCoherencia: 0,
           sessionComision: 0,
+          sessionOmision: 0,
           sessionRecall: 0,
           sessionTotal: 0,
           conclusionTecnica: "No se ha proporcionado todavía",
@@ -207,23 +309,27 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
   }
 
-  //Buscar sesiones
-  async listarSesiones(sesionPaginationDto: SesionPaginationDto){
+  /* BUSCAR SESIONES DEL PACIENTE ESPECIFICAMENTE*/
+  async listarSesiones(idPaciente:number, sesionPaginationDto: SesionPaginationDto){
+    const {idPaciente:__, ...data} = sesionPaginationDto
+
     const totalPages = await this.sESION.count({
       where: {
-        estado: sesionPaginationDto.estado_sesion
+        estado: data.estado_sesion,
+        idPaciente: idPaciente
       }
     })
 
-    const currentPage = Number(sesionPaginationDto.page);
-    const perPage = Number(sesionPaginationDto.limit);
+    const currentPage = Number(data.page);
+    const perPage = Number(data.limit);
 
     return {
       data: await this.sESION.findMany({
         skip: (currentPage-1)*perPage,
         take: perPage,
         where: {
-          estado: sesionPaginationDto.estado_sesion
+          estado: data.estado_sesion,
+          idPaciente: idPaciente
         }
       }),
       meta: {
@@ -235,6 +341,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   }
 
+  /* BUSCAR SESIÓN POR ID*/
   async buscarSesion(id: number){
     const sesion = await this.sESION.findFirst({
       where: {
@@ -250,7 +357,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     return sesion;
   }
 
-
+  /*ACTUALIZAR SESIÓN*/
   async actualizarSesion(id: number, actualizarSesionDto: ActualizarSesionDto){
     const {id:__, ...data} = actualizarSesionDto;
 
@@ -264,9 +371,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     })
   }
 
-
-
-  //--------------- PUNTAJE ------------------
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------PUNTAJE---------------------------------*/
+  /*-------------------------------------------------------------------------*/
 
   async crearPuntaje(crearPuntajeI: CrearPuntajeInterface){
     const idDescripcion = crearPuntajeI.idDescripcion;
@@ -300,8 +407,11 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
 
- // --------------- DESCRIPCION -----------------
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------DESCRIPCIÓN---------------------------------*/
+  /*-------------------------------------------------------------------------*/
 
+  /* CREAR DESCRPCIÓN */
   async crearDescripcion(crearDescripcionDto: CrearDescriptionDto){
 
     //Validar idPaciente
@@ -383,6 +493,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         estado: estado_sesion.completado,
         sessionRecall: resultsSesion.PromedioExactitud ?? undefined,
         sessionComision: resultsSesion.PromedioComision ?? undefined,
+        sessionOmision: resultsSesion.PromedioOmision ?? undefined,
         sessionCoherencia: resultsSesion.PromedioCoherencia ?? undefined, 
         sessionFluidez: resultsSesion.PromedioFluidez ?? undefined,
         sessionTotal: resultsSesion.PuntajeTotalPromedio ?? undefined,
@@ -397,7 +508,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       //Se llama a la función de actualizar ya existente
       await this.actualizarSesion(idSesion, sesionActualizar);
     }
-    //TODO: GENERAR BASELINE
     
     return {
       descripcion: descripcion,
@@ -407,7 +517,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
 
-
+  /*  BUSCAR DESCRIPCIÓN */
   async buscarDescripcion(id: number){
     const descripcion = await this.dESCRIPCION.findFirst({
       where:{
@@ -425,8 +535,40 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     return descripcion;
   }
 
+  /* LISTAR DESCRIPCIONES DE UNA SESIÓN (LA SESIÓN YA ESTÁ ASOCIADA AL PACIENTE)*/
+  async listarDescripciones(descripcionesPaginationDto: DescripcionPaginationDto){
+    await this.buscarSesion(descripcionesPaginationDto.idSesion);
 
-  // --------- GEMINI AI FUNCTIONS -------
+    const totalPages = await this.dESCRIPCION.count({
+      where: {
+        idSesion: descripcionesPaginationDto.idSesion
+      }
+    })
+
+    const currentPage = Number(descripcionesPaginationDto.page);
+    const perPage = Number(descripcionesPaginationDto.limit);
+
+    return {
+      data: await this.dESCRIPCION.findMany({
+        skip: (currentPage-1)*perPage,
+        take: perPage,
+        where: {
+          idSesion: descripcionesPaginationDto.idSesion
+        }
+      }),
+      meta: {
+        total: totalPages,
+        page: currentPage,
+        lastPage: Math.ceil(totalPages/perPage)
+      }
+    }
+    
+  }
+
+
+  /*-------------------------------------------------------------------------*/
+  /*--------------------------------GEMINI-AI--------------------------------*/
+  /*-------------------------------------------------------------------------*/
 
   async comparacionDescripcionGroundTruth(idDescripcion: number, descripcionPaciente: string, groundTruth: string, palabrasClave: string[]): Promise<SalidaGeminiInterface>{
     const prompt = this.generarPromptComparacion(descripcionPaciente, groundTruth, palabrasClave);
@@ -551,9 +693,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     } 
   }
 
-  /*
-    FUNCIONES PRIVADAS PARA GENERAR LOS PROMPTS A LA IA
-  */
+  /*--------------------------------------------------------*/
+  /*---FUNCIONES PRIVADAS PARA GENERAR LOS PROMPTS A LA IA--*/
+  /*--------------------------------------------------------*/
 
   private generarPromptComparacion(descripcionPaciente: string, groundTruth: string, palabrasClave: string[]){
     return `
@@ -619,6 +761,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     Datos de la sesión (0.0–1.0):
     - sessionRecall: ${infoSesion.sessionRecall}
     - sessionComision: ${infoSesion.sessionComision}
+    - sessionOmision: ${infoSesion.sessionOmision}
     - sessionCoherencia: ${infoSesion.sessionCoherencia}
     - sessionFluidez: ${infoSesion.sessionFluidez}
     - sessionTotal: ${infoSesion.sessionTotal}

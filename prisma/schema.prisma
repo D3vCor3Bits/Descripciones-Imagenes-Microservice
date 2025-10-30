@@ -74,6 +74,7 @@ model SESION {
   conclusionTecnica String?
   sessionFluidez    Float         @default(0)
   conclusionNormal  String        @default("")
+  sessionOmision    Float?        @default(0)
   DESCRIPCION       DESCRIPCION[]
 }
 
@@ -95,4 +96,3 @@ enum estado_sesion {
   pendiente
   completado
 }
-

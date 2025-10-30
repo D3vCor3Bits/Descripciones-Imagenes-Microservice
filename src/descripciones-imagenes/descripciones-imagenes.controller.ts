@@ -1,14 +1,18 @@
 import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
-import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
+import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
 import { GetAIresponseDto } from './dto/get-ai-response.dto';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
 @Controller()
 export class DescripcionesImagenesController {
   constructor(private readonly descripcionesImagenesService: DescripcionesImagenesService) {}
 
-  //IMAGENES
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------IMÁGENES--------------------------------*/
+  /*-------------------------------------------------------------------------*/
+
+  /*MessagePattern para subir la imagen*/
 
   @MessagePattern({cmd:'uploadImageCloudinary'})
   async uploadImage(@Payload() payload: any){
@@ -48,80 +52,116 @@ export class DescripcionesImagenesController {
     return this.descripcionesImagenesService.create(imagenPayload);
   }
 
-
-  @MessagePattern({cmd:'findAllDescripcionesImagenes'})
-  findAll() {
-    return "holaaaa";
-  }
-
-  //Buscar una imagen
+  /* BUSCAR IMAGEN */
   @MessagePattern({cmd:'buscarImagen'})
   buscarImagen(@Payload('id', ParseIntPipe) id: number) {
     return this.descripcionesImagenesService.buscarImagen(id);
   }
+
+  /* LISTAR TODAS LAS IMÁGENES DE UN CUIDADOR: para mostrarle al usuario */
+  @MessagePattern({cmd:'listarImagenes'})
+  listarImagenes(@Payload() imagenPaginationDto: ImagenPaginationDto){
+    return this.descripcionesImagenesService.listarImagenesCuidador(imagenPaginationDto);
+  }
+
 
   @MessagePattern('updateDescripcionesImagene')
   update(@Payload() updateDescripcionesImageneDto: any) {
     return this.descripcionesImagenesService.update(updateDescripcionesImageneDto.id, updateDescripcionesImageneDto);
   }
 
-  @MessagePattern('removeDescripcionesImagene')
-  remove(@Payload() id: number) {
-    return this.descripcionesImagenesService.remove(id);
+  /*ELIMINAR IMAGEN*/
+  @MessagePattern({cmd:'eliminarImagen'})
+  eliminarImagen(@Payload('id', ParseIntPipe) id: number) {
+    return this.descripcionesImagenesService.eliminarImagen(id);
   }
 
 
-  /* ----------- GROUNDTRUH ----------- */
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------GROUNDTRUH--------------------------------*/
+  /*-------------------------------------------------------------------------*/
   
-  //MessagePattern para crear groundtruth
+  /* MESSAGEPATTERN PARA CREAR GROUNDTRUTH*/
+
   @MessagePattern({cmd:'crearGroundTruth'})
   crearGroundTruth(@Payload() groundTruthDto: CrearGroundTruthDto){
     return this.descripcionesImagenesService.crearGroundTruth(groundTruthDto);
   }
+
+  /*BUSCAR GROUNDTRUTH*/
 
   @MessagePattern({cmd:'buscarGroundTruth'})
   buscarGroundTruth(@Payload('id', ParseIntPipe) id: number){
     return this.descripcionesImagenesService.buscarGroundTruth(id);
   }
 
+  /*BUSCAR GROUNDTRUTH POR ID DE IMAGEN*/
   @MessagePattern({cmd:'buscarGroundTruthIdImagen'})
   buscarGroundTruthIdImagen(@Payload('id', ParseIntPipe) id: number){
     return this.descripcionesImagenesService.buscarGroundTruthIdImagen(id);
   }
-  //SESSIONS
 
-  //MessagePattern para crear la sesión
+  @MessagePattern({cmd:'actualizarGroundTruth'})
+  actualizarGroundTruth(@Payload() actualizarGroundTruthDto: ActualizarGroundTruthDto){
+    return this.descripcionesImagenesService.actualizarGroundTruth(actualizarGroundTruthDto.id, actualizarGroundTruthDto);
+  }
+
+  @MessagePattern({cmd:'eliminarGroundTruth'})
+  eliminarGroundTruth(@Payload('id', ParseIntPipe) id: number){
+    return this.descripcionesImagenesService.eliminarGroundTruth(id);
+  }
+  
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------SESIONES--------------------------------*/
+  /*-------------------------------------------------------------------------*/
+
+  /* CREAR SESIÓN */
   @MessagePattern({cmd:'crearSesion'})
   crearSesion(@Payload() crearSesion: CrearSesionDto){
     return this.descripcionesImagenesService.crearSesion(crearSesion);
   }
 
-  //MessagePattern para buscar sesiones
+  /* BUSCAR SESIÓN */
+  @MessagePattern({cmd:'buscarSesion'})
+  buscarSesion(@Payload('id', ParseIntPipe) id: number){
+    return this.descripcionesImagenesService.buscarSesion(id);
+  }
+
+  /* LISTAR SESIONES */
   @MessagePattern({cmd:'listarSesiones'})
   listarSesiones(@Payload() sesionPaginationDto: SesionPaginationDto){
-    return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto);
+    return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto.idPaciente, sesionPaginationDto);
   }
   
+  /* ACTUALZIZAR SESIÓN*/
   @MessagePattern({cmd: 'actualizarSesion'})
   actualizarSesion(@Payload() actualizarSesionDto: ActualizarSesionDto){
     return this.descripcionesImagenesService.actualizarSesion(actualizarSesionDto.id, actualizarSesionDto);
   }
 
+  /*-------------------------------------------------------------------------*/
+  /*---------------------------------DESCRIPCIÓN--------------------------------*/
+  /*-------------------------------------------------------------------------*/
 
-  //PUNTAJE
-
-
-
-  //------------ DESCR IPCION -------------
-
+  /* 
+  CREAR DESCRIPCIÓN:
+  Al crearla internamente se calcula el puntaje con relación al GT,
+  se devuelven los puntajes y un mensaje de la IA. Indicando, de manera empática el desempeño
+  */
   @MessagePattern({cmd:'crearDescripcion'})
   crearDescripcion(@Payload() descripcionDto: CrearDescriptionDto){
     return this.descripcionesImagenesService.crearDescripcion(descripcionDto);
   }
 
-  @MessagePattern({cmd:'geminiResponse'})
-  geminiResponse(@Payload() aIResponseDto: GetAIresponseDto){
-    return null
+  /*BUSCAR DESCRIPCIÓN*/
+  @MessagePattern({cmd:'buscarDescripcion'})
+  buscarDescripcion(@Payload('id', ParseIntPipe) id: number){
+    return this.descripcionesImagenesService.buscarDescripcion(id);
   }
 
+  /* LISTAR DESCRIPCIONES DE UNA SEIÓN*/
+  @MessagePattern({cmd:'listarDescripciones'})
+  listarDescripciones(@Payload() descripcionesPaginationDto: DescripcionPaginationDto){
+    return this.descripcionesImagenesService.listarDescripciones(descripcionesPaginationDto);
+  }
 }
