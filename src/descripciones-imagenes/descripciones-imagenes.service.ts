@@ -116,6 +116,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /*BUSCAR IMAGEN*/
 
+  //Buscar imágen por id
   async buscarImagen(id: number) {
     const imagen = await this.iMAGEN.findFirst({
       where: {
@@ -170,7 +171,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /* FUNCIÓN PARA CREAR GROUNDTRUTH*/
 
   async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
-      //Verificar idUsuario
+      //TODO: Verificar idUsuario
 
       //Verificar idImagen
       const idImagen = crearGroundTruthDto.idImagen;
