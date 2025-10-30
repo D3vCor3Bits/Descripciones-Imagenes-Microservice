@@ -8,9 +8,5 @@ export class CrearGroundTruthDto{
 
     @IsNumber()
     @IsPositive()
-    idCuidador: number;
-
-    @IsNumber()
-    @IsPositive()
     idImagen: number;
 }

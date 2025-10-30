@@ -11,7 +11,7 @@ model DESCRIPCION {
   idDescripcion Int       @id @default(autoincrement())
   texto         String
   fecha         DateTime  @default(now()) @db.Timestamptz(6)
-  idImagen      Int
+  idImagen      Int       @unique
   idPaciente    Int
   idSesion      Int
   IMAGEN        IMAGEN    @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
@@ -20,12 +20,14 @@ model DESCRIPCION {
 }
 
 model GROUNDTRUTH {
-  idGroundtruth Int      @id @default(autoincrement())
-  texto         String
-  fecha         DateTime @default(now()) @db.Timestamptz(6)
-  idCuidador    Int
-  idImagen      Int
-  IMAGEN        IMAGEN   @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+  idGroundtruth         Int      @id @default(autoincrement())
+  texto                 String
+  fecha                 DateTime @default(now()) @db.Timestamptz(6)
+  idImagen              Int
+  palabrasClave         String[]
+  preguntasGuiaCuidador String[]
+  preguntasGuiaPaciente String[]
+  IMAGEN                IMAGEN   @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model IMAGEN {
@@ -36,26 +38,27 @@ model IMAGEN {
   idAsset       String?
   idPublicImage String?
   formato       String?
-  DESCRIPCION   DESCRIPCION[]
+  DESCRIPCION   DESCRIPCION?
   GROUNDTRUTH   GROUNDTRUTH[]
-  PUNTAJE       PUNTAJE[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model PUNTAJE {
-  idPuntaje         Int         @id @default(autoincrement())
-  idDescripcion     Int
-  idPaciente        Int
-  idImagen          Int
-  rateOmision       Float
-  rateComision      Float
-  rateExactitud     Float
-  puntajeCoherencia Float
-  puntajeFluidez    Float
-  puntajeTotal      Float
-  fechaCalculo      DateTime    @default(now()) @db.Timestamptz(6)
-  DESCRIPCION       DESCRIPCION @relation(fields: [idDescripcion], references: [idDescripcion], onDelete: Cascade, onUpdate: NoAction)
-  IMAGEN            IMAGEN      @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
+  idPuntaje             Int         @id @default(autoincrement())
+  idDescripcion         Int
+  rateOmision           Float
+  rateComision          Float
+  rateExactitud         Float
+  puntajeCoherencia     Float
+  puntajeFluidez        Float
+  puntajeTotal          Float
+  fechaCalculo          DateTime    @default(now()) @db.Timestamptz(6)
+  detallesOmitidos      String[]
+  palabrasClaveOmitidas String[]
+  aciertos              String[]
+  conclusion            String?
+  elementosComision     String[]
+  DESCRIPCION           DESCRIPCION @relation(fields: [idDescripcion], references: [idDescripcion], onDelete: Cascade, onUpdate: NoAction)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -68,7 +71,23 @@ model SESION {
   sessionComision   Float
   sessionCoherencia Float
   sessionTotal      Float
+  conclusionTecnica String?
+  sessionFluidez    Float         @default(0)
+  conclusionNormal  String        @default("")
   DESCRIPCION       DESCRIPCION[]
+}
+
+
+model VW_PromediosPorSesion {
+  idSesion              Int     @id           @map("idSesion")
+  PromedioOmision       Float?  @map("PromedioOmision")
+  PromedioComision      Float?  @map("PromedioComision")
+  PromedioExactitud     Float?  @map("PromedioExactitud")
+  PromedioCoherencia    Float?  @map("PromedioCoherencia")
+  PromedioFluidez       Float?  @map("PromedioFluidez")
+  PuntajeTotalPromedio  Float?  @map("PuntajeTotalPromedio")
+
+  @@map("VW_PromediosPorSesion") 
 }
 
 enum estado_sesion {
@@ -76,3 +95,4 @@ enum estado_sesion {
   pendiente
   completado
 }
+

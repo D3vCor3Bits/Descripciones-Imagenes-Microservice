@@ -1,7 +1,6 @@
-import { estado_sesion } from "@prisma/client";
 import { IsEnum, IsOptional } from "class-validator";
 import { PaginationDto } from "src/common";
-import { estadoListDto } from "../enum/estado.enum";
+import { estado_sesion, estadoListDto } from "../enum/estado.enum";
 
 
 export class SesionPaginationDto extends PaginationDto{

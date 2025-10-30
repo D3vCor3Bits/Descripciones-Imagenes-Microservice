@@ -1,7 +1,9 @@
 import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
-import { CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
+import { CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, SesionPaginationDto } from './dto';
+import { GetAIresponseDto } from './dto/get-ai-response.dto';
+import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
 @Controller()
 export class DescripcionesImagenesController {
   constructor(private readonly descripcionesImagenesService: DescripcionesImagenesService) {}
@@ -72,10 +74,6 @@ export class DescripcionesImagenesController {
   }
 
 
- 
-  //DESCRIPCION
-
-
   /* ----------- GROUNDTRUH ----------- */
   
   //MessagePattern para crear groundtruth
@@ -84,20 +82,17 @@ export class DescripcionesImagenesController {
     return this.descripcionesImagenesService.crearGroundTruth(groundTruthDto);
   }
 
-  //MessagePattern para buscar groundtruth
   @MessagePattern({cmd:'buscarGroundTruth'})
   buscarGroundTruth(@Payload('id', ParseIntPipe) id: number){
     return this.descripcionesImagenesService.buscarGroundTruth(id);
   }
 
-  //MessagePattern para buscar groundTruth por id imágen
   @MessagePattern({cmd:'buscarGroundTruthIdImagen'})
   buscarGroundTruthIdImagen(@Payload('id', ParseIntPipe) id: number){
     return this.descripcionesImagenesService.buscarGroundTruthIdImagen(id);
   }
+  //SESSIONS
 
-  //---------------SESSIONS---------------
-  
   //MessagePattern para crear la sesión
   @MessagePattern({cmd:'crearSesion'})
   crearSesion(@Payload() crearSesion: CrearSesionDto){
@@ -109,7 +104,27 @@ export class DescripcionesImagenesController {
   listarSesiones(@Payload() sesionPaginationDto: SesionPaginationDto){
     return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto);
   }
+  
+  @MessagePattern({cmd: 'actualizarSesion'})
+  actualizarSesion(@Payload() actualizarSesionDto: ActualizarSesionDto){
+    return this.descripcionesImagenesService.actualizarSesion(actualizarSesionDto.id, actualizarSesionDto);
+  }
+
 
   //PUNTAJE
+
+
+
+  //------------ DESCR IPCION -------------
+
+  @MessagePattern({cmd:'crearDescripcion'})
+  crearDescripcion(@Payload() descripcionDto: CrearDescriptionDto){
+    return this.descripcionesImagenesService.crearDescripcion(descripcionDto);
+  }
+
+  @MessagePattern({cmd:'geminiResponse'})
+  geminiResponse(@Payload() aIResponseDto: GetAIresponseDto){
+    return null
+  }
 
 }

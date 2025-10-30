@@ -1,4 +1,8 @@
-import {estado_sesion} from "@prisma/client"
+export enum estado_sesion{
+    completado = 'completado',
+    en_curso = 'en_curso',
+    pendiente = 'pendiente'
+}
 
 export const estadoListDto = [
     estado_sesion.completado,

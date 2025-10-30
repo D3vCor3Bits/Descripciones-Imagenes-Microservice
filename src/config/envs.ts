@@ -8,6 +8,7 @@ interface EnvVars {
     CLOUDINARY_API_KEY: string;
     CLOUDINARY_API_SECRET: string
     NATS_SERVERS: string [];
+    GEMINI_API_KEY: string;
 }
 
 const envsSchema = joi.object({
@@ -16,6 +17,7 @@ const envsSchema = joi.object({
     CLOUDINARY_NAME: joi.string().required(),
     CLOUDINARY_API_KEY: joi.string().required(),
     CLOUDINARY_API_SECRET: joi.string().required(),
+    GEMINI_API_KEY: joi.string().required(),
 
     NATS_SERVERS: joi.array().items(joi.string()).required()
 }).unknown(true);
@@ -37,5 +39,6 @@ export const envs = {
     cloudinaryName: envVars.CLOUDINARY_NAME,
     cloudinaryApiKey: envVars.CLOUDINARY_API_KEY,
     cloudinarySecret: envVars.CLOUDINARY_API_SECRET,
-    natsServers: envVars.NATS_SERVERS
+    natsServers: envVars.NATS_SERVERS,
+    geminiApiKey: envVars.GEMINI_API_KEY
 }
