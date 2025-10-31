@@ -370,6 +370,23 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     return sesion;
   }
 
+  /* BUSCAR SESIÓN POR ID DE PACIENTE*/
+  async buscarSesionPaciente(id: number){
+    const sesion = await this.sESION.findFirst({
+      where: {
+        idPaciente: id
+      }
+    })
+    if(!sesion){
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: "Sesión no encontrada en la base de datos"
+      })
+    }
+    return sesion;
+  }
+
+
   /*ACTUALIZAR SESIÓN*/
   async actualizarSesion(id: number, actualizarSesionDto: ActualizarSesionDto){
     const {id:__, ...data} = actualizarSesionDto;
@@ -437,16 +454,20 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     //Validación idSesion
     const idSesion = crearDescripcionDto.idSesion;
     await this.buscarSesion(idSesion);
-      //Validamos cantidad de descripciones por sesion
-      const numeroDescripciones = await this.dESCRIPCION.count({
-        where:{
-          idSesion: idSesion
-        }
+    const sesion = await this.buscarSesionPaciente(idPaciente);
+    if(crearDescripcionDto.idSesion != sesion.idSesion){
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "La sesión que está describiendo no está asociada al paciente indicado"
       })
-      if (numeroDescripciones == 3){
+    }
+
+
+      //Validamos estado  sesion
+      if (sesion.estado == estado_sesion.completado){
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: "Solo es posible describir 3 imágenes en una sesión"
+          message: "No es posible realizar descripciones en sesiones completadas"
         })
       }
       const descripcion = await this.dESCRIPCION.create({
@@ -454,10 +475,16 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         texto: crearDescripcionDto.texto,
         idPaciente: crearDescripcionDto.idPaciente,
         idImagen: crearDescripcionDto.idImagen,
-        idSesion: crearDescripcionDto.idSesion
+        idSesion: crearDescripcionDto.idSesion,
       }
     })
 
+    const numeroDescripciones = await this.dESCRIPCION.count({
+      where:{
+        idSesion: idSesion
+      }
+    })
+    
     //Buscamos groundTruth
     const groundTruthDelaImagen = await this.gROUNDTRUTH.findFirst({
       where: {

@@ -10,7 +10,7 @@ datasource db {
 model DESCRIPCION {
   idDescripcion Int       @id @default(autoincrement())
   texto         String
-  fecha         DateTime  @default(now()) @db.Timestamptz(6)
+  fecha         DateTime  @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @db.Timestamptz(6)
   idImagen      Int       @unique
   idPaciente    Int
   idSesion      Int
