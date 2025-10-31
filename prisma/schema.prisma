@@ -10,7 +10,7 @@ datasource db {
 model DESCRIPCION {
   idDescripcion Int       @id @default(autoincrement())
   texto         String
-  fecha         DateTime  @default(now()) @db.Timestamptz(6)
+  fecha         DateTime  @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @db.Timestamptz(6)
   idImagen      Int       @unique
   idPaciente    Int
   idSesion      Int
@@ -23,23 +23,22 @@ model GROUNDTRUTH {
   idGroundtruth         Int      @id @default(autoincrement())
   texto                 String
   fecha                 DateTime @default(now()) @db.Timestamptz(6)
-  idImagen              Int
+  idImagen              Int      @unique
   palabrasClave         String[]
-  preguntasGuiaCuidador String[]
   preguntasGuiaPaciente String[]
   IMAGEN                IMAGEN   @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model IMAGEN {
-  idImagen      Int           @id @default(autoincrement())
+  idImagen      Int          @id @default(autoincrement())
   urlImagen     String
-  fechaSubida   DateTime      @default(now()) @db.Timestamptz(6)
+  fechaSubida   DateTime     @default(now()) @db.Timestamptz(6)
   idCuidador    Int
   idAsset       String?
   idPublicImage String?
   formato       String?
   DESCRIPCION   DESCRIPCION?
-  GROUNDTRUTH   GROUNDTRUTH[]
+  GROUNDTRUTH   GROUNDTRUTH?
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -74,9 +73,9 @@ model SESION {
   conclusionTecnica String?
   sessionFluidez    Float         @default(0)
   conclusionNormal  String        @default("")
+  sessionOmision    Float?        @default(0)
   DESCRIPCION       DESCRIPCION[]
 }
-
 
 model VW_PromediosPorSesion {
   idSesion              Int     @id           @map("idSesion")
@@ -95,4 +94,3 @@ enum estado_sesion {
   pendiente
   completado
 }
-
