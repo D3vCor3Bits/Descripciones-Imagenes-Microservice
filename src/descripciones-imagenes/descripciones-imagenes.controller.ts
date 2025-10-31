@@ -2,7 +2,6 @@ import { Controller, ParseIntPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
 import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
-import { GetAIresponseDto } from './dto/get-ai-response.dto';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
 @Controller()
 export class DescripcionesImagenesController {

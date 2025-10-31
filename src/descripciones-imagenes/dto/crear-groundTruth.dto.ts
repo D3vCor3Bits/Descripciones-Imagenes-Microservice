@@ -1,4 +1,4 @@
-import {IsNumber, IsString, IsPositive, IsDateString} from 'class-validator';
+import {IsNumber, IsString, IsPositive, IsDateString, IsArray} from 'class-validator';
 
 
 export class CrearGroundTruthDto{
@@ -9,4 +9,10 @@ export class CrearGroundTruthDto{
     @IsNumber()
     @IsPositive()
     idImagen: number;
+
+    @IsArray()
+    palabrasClave: string[];
+
+    @IsArray()
+    preguntasGuiaPaciente: string[];
 }

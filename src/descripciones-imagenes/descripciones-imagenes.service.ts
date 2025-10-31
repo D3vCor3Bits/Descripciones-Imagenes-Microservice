@@ -183,12 +183,21 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         });
       }
       
-      return await this.gROUNDTRUTH.create({
-        data:{
-          texto: crearGroundTruthDto.texto,
-          idImagen: crearGroundTruthDto.idImagen
-        }
-      })
+      try {
+        return await this.gROUNDTRUTH.create({
+          data:{
+            texto: crearGroundTruthDto.texto,
+            idImagen: crearGroundTruthDto.idImagen,
+            palabrasClave: crearGroundTruthDto.palabrasClave,
+            preguntasGuiaPaciente: crearGroundTruthDto.preguntasGuiaPaciente
+          }
+        }) 
+      } catch (error) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: "Una imagen no puede tener más de una verdad absoluta"
+        })
+      }
   }
 
   /*FUNCIÓN PARA BUSCAR GROUNDTRUTH POR ID*/
@@ -233,7 +242,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /*FUNCIÓN PARA ACTUALIZAR GROUNDTRUTH*/
   async actualizarGroundTruth(id: number, actualizarGroundTruthDto: ActualizarGroundTruthDto){
     const {id:__, ...data} = actualizarGroundTruthDto;
-
     const groundTruth = await this.buscarGroundTruth(id);
     const fechaSubida = groundTruth.fecha;
     const result = calcularDiferenciaHoraria(fechaSubida);
@@ -244,12 +252,16 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       });
     }
 
-    return this.gROUNDTRUTH.update({
-      where: {
-        idGroundtruth: id
-      },
-      data: data
-    })
+    try {
+      return this.gROUNDTRUTH.update({
+        where: {
+          idGroundtruth: id
+        },
+        data: data
+      }) 
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   /*FUNCIÓN PARA ELIMINAR GROUNDTRUTH*/
