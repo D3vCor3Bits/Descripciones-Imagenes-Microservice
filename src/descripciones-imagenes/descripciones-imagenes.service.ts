@@ -1,11 +1,11 @@
-import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { estado_sesion, PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
 import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { GoogleGenAI, Type} from '@google/genai'
-import { envs } from 'src/config';
+import { envs, NATS_SERVICE } from 'src/config';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
 import { SalidaConclusionSesionInterface,CrearPuntajeInterface, SalidaGeminiInterface } from 'src/interfaces';
 import { calcularDiferenciaHoraria } from './validationFunctions/hora-subida';
@@ -19,7 +19,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   private readonly logger = new Logger('DescImagesService');
   private readonly gemini: GoogleGenAI
 
-  constructor(){
+  constructor(@Inject(NATS_SERVICE) private readonly client: ClientProxy){
     super();
     const geminiApiKey = envs.geminiApiKey;
     this.gemini = new GoogleGenAI({apiKey: geminiApiKey});
@@ -239,6 +239,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       return gt;
     }
 
+  
+
   /*FUNCIÓN PARA ACTUALIZAR GROUNDTRUTH*/
   async actualizarGroundTruth(id: number, actualizarGroundTruthDto: ActualizarGroundTruthDto){
     const {id:__, ...data} = actualizarGroundTruthDto;
@@ -250,6 +252,17 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         status: HttpStatus.FORBIDDEN,
         message: 'No es posible actualizar la descripción de verdad absoluta: han pasado más de 24 horas desde la subida'
       });
+    }
+    const descripcion = await this.dESCRIPCION.findFirst({
+      where: {
+        idImagen: groundTruth.idImagen
+      }
+    })
+    if(descripcion){
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "No puedes actualizar la verdad absoluta, ya el paciente describió la imágen"
+      })
     }
 
     try {
@@ -276,7 +289,17 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         message: 'No es posible eliminar la descripción de verdad absoluta: han pasado más de 24 horas desde la subida'
       });
     }
-
+    const descripcion = await this.dESCRIPCION.findFirst({
+      where: {
+        idImagen: groundTruth.idImagen
+      }
+    })
+    if(descripcion){
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "No puedes eliminar la verdad absoluta, ya el paciente describió la imágen"
+      })
+    }
 
     await this.gROUNDTRUTH.delete({
       where:{
@@ -323,7 +346,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /* CANTIDAD DE SESION POR PARCIENTE #*/
-  async cantidadSesionesPaciente(idPaciente: number){
+  async cantidadSesionesPaciente(idPaciente: string){
     //Verificar paciente
 
     const cantSesiones = await this.sESION.count({
@@ -338,7 +361,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /* TRAER SOLAMENTE EL BASELINE DEL PACIENTE, ES DECIR, LA PRIMERA SESIÓN */
-  async baseline(idPaciente: number){
+  async baseline(idPaciente: string){
 
     const baseline = await this.sESION.findFirst({
       where: {
@@ -350,7 +373,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /* BUSCAR SESIONES DEL PACIENTE ESPECIFICAMENTE*/
-  async listarSesiones(idPaciente:number, sesionPaginationDto: SesionPaginationDto){
+  async listarSesiones(idPaciente:string, sesionPaginationDto: SesionPaginationDto){
     const {idPaciente:__, ...data} = sesionPaginationDto
 
     const totalPages = await this.sESION.count({
@@ -382,7 +405,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /*LISTAR TODAS LAS SESIONES DE UN PACIENTE SIN PAGINACIÓN*/
-  async listarSesionesPaciente(idPaciente: number){
+  async listarSesionesPaciente(idPaciente: string){
     //Validar id paciente
     console.log("ENTRE ACA")
     try {
@@ -415,7 +438,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /* BUSCAR SESIÓN POR ID DE PACIENTE*/
-  async buscarSesionPaciente(id: number){
+  async buscarSesionPaciente(id: string){
     const sesion = await this.sESION.findFirst({
       where: {
         idPaciente: id
@@ -490,6 +513,14 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
     //Validar idPaciente
     const idPaciente = crearDescripcionDto.idPaciente;
+    const paciente = this.client.send({ cmd : 'findUserById'}, {idPaciente})
+
+    //Numero de sesionesPaciente
+    const numeroSesiones = await this.sESION.count({
+      where: {
+        idPaciente: idPaciente
+      }
+    })
 
     //Validación idImagen
     const idImagen = crearDescripcionDto.idImagen;
@@ -506,23 +537,24 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       })
     }
 
-
       //Validamos estado  sesion
-      if (sesion.estado == estado_sesion.completado){
-        throw new RpcException({
-          status: HttpStatus.BAD_REQUEST,
-          message: "No es posible realizar descripciones en sesiones completadas"
-        })
-      }
-      const descripcion = await this.dESCRIPCION.create({
-      data: {
-        texto: crearDescripcionDto.texto,
-        idPaciente: crearDescripcionDto.idPaciente,
-        idImagen: crearDescripcionDto.idImagen,
-        idSesion: crearDescripcionDto.idSesion,
-      }
+    if (sesion.estado == estado_sesion.completado){
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "No es posible realizar descripciones en sesiones completadas"
+      })
+    }
+
+    const descripcion = await this.dESCRIPCION.create({
+    data: {
+      texto: crearDescripcionDto.texto,
+      idPaciente: crearDescripcionDto.idPaciente,
+      idImagen: crearDescripcionDto.idImagen,
+      idSesion: crearDescripcionDto.idSesion,
+    }
     })
 
+    //Contamos descripciones
     const numeroDescripciones = await this.dESCRIPCION.count({
       where:{
         idSesion: idSesion
@@ -591,6 +623,13 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
       //Se llama a la función de actualizar ya existente
       await this.actualizarSesion(idSesion, sesionActualizar);
+
+      if(numeroSesiones == 1){
+        this.client.emit({cmd:'generarAvisoBaseline'}, {
+
+        })
+      }
+
     }
     
     return {
