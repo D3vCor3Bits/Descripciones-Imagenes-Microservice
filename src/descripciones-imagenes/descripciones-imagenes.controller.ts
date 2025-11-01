@@ -132,10 +132,26 @@ export class DescripcionesImagenesController {
     return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto.idPaciente, sesionPaginationDto);
   }
   
+  /* LISTAR SESIONES SIN PAGINACIÓN */
+  @MessagePattern({cmd:'listarSesionesCompletas'})
+  listarTodasSesiones(@Payload('idPaciente', ParseIntPipe) id:number){
+    return this.descripcionesImagenesService.listarSesionesPaciente(id);
+  }
+
   /* ACTUALZIZAR SESIÓN*/
   @MessagePattern({cmd: 'actualizarSesion'})
   actualizarSesion(@Payload() actualizarSesionDto: ActualizarSesionDto){
     return this.descripcionesImagenesService.actualizarSesion(actualizarSesionDto.id, actualizarSesionDto);
+  }
+
+  @MessagePattern({cmd:'cantidadSesiones'})
+  cantidadSesiones(@Payload('idPaciente', ParseIntPipe) idPaciente: number){
+    return this.descripcionesImagenesService.cantidadSesionesPaciente(idPaciente);
+  }
+
+  @MessagePattern({cmd:'baseline'})
+  baselinePaciente(@Payload('idPaciente', ParseIntPipe) idPaciente: number){
+    return this.descripcionesImagenesService.baseline(idPaciente);
   }
 
   /*-------------------------------------------------------------------------*/

@@ -322,6 +322,33 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
   }
 
+  /* CANTIDAD DE SESION POR PARCIENTE #*/
+  async cantidadSesionesPaciente(idPaciente: number){
+    //Verificar paciente
+
+    const cantSesiones = await this.sESION.count({
+      where: {
+        idPaciente: idPaciente
+      }
+    })
+
+    return {
+      cantidad: cantSesiones
+    };
+  }
+
+  /* TRAER SOLAMENTE EL BASELINE DEL PACIENTE, ES DECIR, LA PRIMERA SESIÓN */
+  async baseline(idPaciente: number){
+
+    const baseline = await this.sESION.findFirst({
+      where: {
+        idPaciente: idPaciente
+      }
+    })
+
+    return baseline;
+  }
+
   /* BUSCAR SESIONES DEL PACIENTE ESPECIFICAMENTE*/
   async listarSesiones(idPaciente:number, sesionPaginationDto: SesionPaginationDto){
     const {idPaciente:__, ...data} = sesionPaginationDto
@@ -353,6 +380,23 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
 
   }
+
+  /*LISTAR TODAS LAS SESIONES DE UN PACIENTE SIN PAGINACIÓN*/
+  async listarSesionesPaciente(idPaciente: number){
+    //Validar id paciente
+    console.log("ENTRE ACA")
+    try {
+      const sesiones = await this.sESION.findMany({
+        where: {
+          idPaciente: idPaciente
+        }
+      })
+      return sesiones; 
+    } catch (error) {
+      throw new RpcException(error)
+    }
+  }
+
 
   /* BUSCAR SESIÓN POR ID*/
   async buscarSesion(id: number){
