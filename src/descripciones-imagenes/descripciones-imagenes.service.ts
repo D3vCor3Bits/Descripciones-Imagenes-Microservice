@@ -405,13 +405,14 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /*LISTAR TODAS LAS SESIONES DE UN PACIENTE SIN PAGINACIÓN*/
-  async listarSesionesPaciente(idPaciente: string){
+  async listarSesionesPacienteCompletadas(idPaciente: string){
     //Validar id paciente
     console.log("ENTRE ACA")
     try {
       const sesiones = await this.sESION.findMany({
         where: {
-          idPaciente: idPaciente
+          idPaciente: idPaciente,
+          estado: estado_sesion.completado
         }
       })
       return sesiones; 

@@ -133,9 +133,9 @@ export class DescripcionesImagenesController {
   }
   
   /* LISTAR SESIONES SIN PAGINACIÓN */
-  @MessagePattern({cmd:'listarSesionesCompletas'})
+  @MessagePattern({cmd:'listarSesionesCompletadas'})
   listarTodasSesiones(@Payload('idPaciente', ParseUUIDPipe) idPaciente:string){
-    return this.descripcionesImagenesService.listarSesionesPaciente(idPaciente);
+    return this.descripcionesImagenesService.listarSesionesPacienteCompletadas(idPaciente);
   }
 
   /* ACTUALZIZAR SESIÓN*/
