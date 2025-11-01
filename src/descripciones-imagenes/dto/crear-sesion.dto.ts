@@ -4,8 +4,8 @@ import { estadoListDto } from '../enum/estado.enum';
 
 export class CrearSesionDto{
 
-    @IsNumber()
-    idPaciente: number
+    @IsString()
+    idPaciente: string
 
     @IsOptional()
     fechaInicio: Date

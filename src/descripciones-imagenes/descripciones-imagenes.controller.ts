@@ -1,4 +1,4 @@
-import { Controller, ParseIntPipe } from '@nestjs/common';
+import { Controller, ParseIntPipe, ParseUUIDPipe } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
 import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
@@ -132,10 +132,26 @@ export class DescripcionesImagenesController {
     return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto.idPaciente, sesionPaginationDto);
   }
   
+  /* LISTAR SESIONES SIN PAGINACIÓN */
+  @MessagePattern({cmd:'listarSesionesCompletadas'})
+  listarTodasSesiones(@Payload('idPaciente', ParseUUIDPipe) idPaciente:string){
+    return this.descripcionesImagenesService.listarSesionesPacienteCompletadas(idPaciente);
+  }
+
   /* ACTUALZIZAR SESIÓN*/
   @MessagePattern({cmd: 'actualizarSesion'})
   actualizarSesion(@Payload() actualizarSesionDto: ActualizarSesionDto){
     return this.descripcionesImagenesService.actualizarSesion(actualizarSesionDto.id, actualizarSesionDto);
+  }
+
+  @MessagePattern({cmd:'cantidadSesiones'})
+  cantidadSesiones(@Payload('idPaciente', ParseUUIDPipe) idPaciente: string){
+    return this.descripcionesImagenesService.cantidadSesionesPaciente(idPaciente);
+  }
+
+  @MessagePattern({cmd:'baseline'})
+  baselinePaciente(@Payload('idPaciente', ParseUUIDPipe) idPaciente: string){
+    return this.descripcionesImagenesService.baseline(idPaciente);
   }
 
   /*-------------------------------------------------------------------------*/
