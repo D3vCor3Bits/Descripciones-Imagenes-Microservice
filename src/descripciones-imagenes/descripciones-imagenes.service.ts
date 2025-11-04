@@ -7,8 +7,9 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { GoogleGenAI, Type} from '@google/genai'
 import { envs, NATS_SERVICE } from 'src/config';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
-import { SalidaConclusionSesionInterface,CrearPuntajeInterface, SalidaGeminiInterface } from 'src/interfaces';
+import { SalidaConclusionSesionInterface,CrearPuntajeInterface, SalidaGeminiInterface, Usuario } from 'src/interfaces';
 import { calcularDiferenciaHoraria } from './validationFunctions/hora-subida';
+import { firstValueFrom } from 'rxjs';
 
 const streamifier = require('streamifier')
 
@@ -64,11 +65,26 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /*FUNCIÓN PARA GUARDAR EN BASE DE DATOS LA IMAGEN*/
 
+  async validaUsuarioId(id: string){
+    
+    const response = await firstValueFrom(
+      this.client.send({ cmd: 'findUserById'},{id})
+    );
+
+    if (response.usuarios.length == 0) {
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: 'Cuidador no encontrado'
+      });
+    }
+    return response.usuarios[0];
+  }
+  
+
+
   async create(crearImagenDto: CrearImagenDto) {
+      const payload = crearImagenDto.imagenes[0];  
     try {
-      const payload = crearImagenDto.imagenes[0];
-      //TODO: REVISAR EL ID QUE EXISTA EN LA BASE DE DATOS DE USUARIOS POR MEDIO DE UN SEND
-      
       return await this.iMAGEN.create({
         data:{
           urlImagen: payload.urlImagen,
@@ -81,7 +97,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     } catch (error) {
       throw new RpcException({
         status: HttpStatus.BAD_REQUEST,
-        message: error
+        message: error.message
       })
     }
   }
@@ -89,6 +105,14 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /* LISTAR IMÁGENES DE UN CUIDADOR*/
 
   async listarImagenesCuidador(imagenesPaginationDto: ImagenPaginationDto) {
+    const usuario = await this.validaUsuarioId(imagenesPaginationDto.cuidadorId);
+    if(!['cuidador', 'administrador'].includes(usuario.rol)){
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "El id proporcionado no corresponde a un cuidador o a un administrador"
+      })
+    }
+
     const totalPages = await this.iMAGEN.count({
     where: {
       idCuidador: imagenesPaginationDto.cuidadorId 
