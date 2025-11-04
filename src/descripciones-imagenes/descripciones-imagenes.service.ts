@@ -624,7 +624,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     if(!sesion){
       throw new RpcException({
         status: HttpStatus.NOT_FOUND,
-        message: "Sesión no encontrada en la base de datos"
+        message: "No hay una sesión asociada a este paciente"
       })
     }
     return sesion;
@@ -686,6 +686,18 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /*---------------------------------DESCRIPCIÓN---------------------------------*/
   /*-------------------------------------------------------------------------*/
 
+  async medicoDePaciente(idPaciente: string){
+    try {
+      const medico = await firstValueFrom(this.client.send({cmd:'pacienteMedico'},{idPaciente}))
+      return medico;
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "Error al traer el médico del paciente"
+      })
+    }
+  }
+
   /* CREAR DESCRPCIÓN */
   async crearDescripcion(crearDescripcionDto: CrearDescriptionDto){
 
@@ -695,6 +707,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     if ( !['paciente'].includes(usuario.rol)) {
       throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'La persona que describe una imagen debe ser un paciente'});
     }
+
 
     //Numero de sesionesPaciente
     const numeroSesiones = await this.sESION.count({
@@ -748,8 +761,27 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       })
     }
 
+    console.log("ENTRANDO A COMPARATIVA")
     //Generamos la comparativa
     const resultadoComparativa = await this.comparacionDescripcionGroundTruth(descripcion.idDescripcion, descripcion.texto, groundTruthDelaImagen.texto, groundTruthDelaImagen.palabrasClave)
+
+    console.log("SALIMOS DE COMPARATIVA")
+
+    if(resultadoComparativa.puntajeTotal < 0.45){
+      console.log("ENTRAMOS A MANDAR ALERTA")
+      const medico = await this.medicoDePaciente(idPaciente);
+      this.client.emit({cmd:'alertasEvaluarPuntaje'},{
+        usuarioEmail: usuario.correo,
+        nombrePaciente: usuario.nombre,
+        nombreDoctor: medico.nombre,
+        puntaje: resultadoComparativa.puntajeTotal,
+        sesion: numeroSesiones,
+        umbralMinimo: 0.45
+      })
+    }
+      console.log("SALIMOS DE MANDAR ALERTA")
+
+
 
     //Verificamos que la descripcion que se acabó de subir sea la 3, en ese caso...
     if(numeroDescripciones == 3){
@@ -775,7 +807,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         },
         select: {conclusion: true}
       });
-      console.log(rows)
       //Aplanamos la salida para que solo sea un arreglo de strings
       const conclusiones = rows.flatMap(r => r.conclusion ? [r.conclusion] : []); 
       //Crear el Dto para actualizar
@@ -799,7 +830,25 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       //Se llama a la función de actualizar ya existente
       await this.actualizarSesion(idSesion, sesionActualizar);
 
-      //TODO GENERAR EL AVISO DEL BASELINE EN CASO DE QUE LA SESIÓN SEA LA 1
+
+      //En caso de que la sesión sea el baseline...
+      if(numeroSesiones == 1){
+      console.log("ENTRAMOS A MANDAR ALERTA DE BASELINE")
+        const medico = await this.medicoDePaciente(idPaciente);
+        this.client.emit({cmd:'generarAvisoBaseline'},{
+          usuarioEmail: usuario.correo,
+          nombreDoctor: medico.nombre,
+          nombrePaciente: usuario.nombre,
+          sessionCoherencia: sesionActualizar.sessionCoherencia,
+          sessionComision: sesionActualizar.sessionComision,
+          sessionFluidez: sesionActualizar.sessionFluidez,
+          sessionOmision: sesionActualizar.sessionOmision,
+          sessionRecall: sesionActualizar.sessionRecall,
+          sessionTotal: sesionActualizar.sessionTotal 
+        })
+      }
+      console.log("SALIMOS DE MANDAR ALERTA DE BASELINE")
+
     }
     return {
       descripcion: descripcion,
@@ -860,7 +909,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
 
-  /*-------------------------------------------------------------------------*/
+  /*------------- ------------------------------------------------------------*/
   /*--------------------------------GEMINI-AI--------------------------------*/
   /*-------------------------------------------------------------------------*/
 
@@ -931,8 +980,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           conclusion: result.conclusion,
         } 
       await this.crearPuntaje(puntaje);
-
-      //MANEJAR ALERTAS EN CASO DE QUE UN VALOR O VALORES SEAN MALOS
       
       return result;
     } catch (error) {
@@ -993,62 +1040,83 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   private generarPromptComparacion(descripcionPaciente: string, groundTruth: string, palabrasClave: string[]){
     return `
-    Eres un Analista Cognitivo Experto para una aplicación de detección de Alzheimer. Tu función es comparar el texto de la Descripción del Paciente con el texto de Referencia del Cuidador (Ground Truth) para evaluar el rendimiento cognitivo.
-    
-    1. GroundTruth: descripción factual escrita por el cuidador sobre una fotografía.
+    Eres un Analista Cognitivo Experto para una aplicación de detección de Alzheimer. Compara la Descripción del Paciente con el GroundTruth (referencia del cuidador) y devuelve solo los valores requeridos por el sistema, sin texto adicional.
+
+    Entradas
+    1) GroundTruth (descripción factual):
     ${groundTruth}
-      
-      Palabras clave del GroundTruth (arreglo):
-      ${palabrasClave}
-    
-    2. DescripciónPaciente: relato libre del paciente sobre la misma fotografía.
+
+    2) Palabras clave del GroundTruth (arreglo; pueden incluir nombres, objetos, acciones y lugares):
+    ${palabrasClave}
+
+    3) DescripciónPaciente (relato libre del paciente):
     ${descripcionPaciente}
 
-    Tu tarea es comparar ambos textos y generar una evaluación cognitiva y lingüística del paciente, devolviendo únicamente los valores requeridos por el sistema (numéricos de 0.0 a 1.0 y listas de palabras/frases), sin ningún texto adicional fuera de la respuesta estructurada.
+    Objetivo
+    Evaluar memoria (recall) y narrativa del paciente con tolerancia semántica (sinónimos, lemas, variantes morfológicas), pero con estricta penalización al olvido (omisiones) y a las invenciones (comisiones).
 
-    Realiza los siguientes pasos internamente:
+    Normalización y correspondencias (interno)
+    - Normaliza mayúsculas/minúsculas, tildes y lematiza.
+    - Usa coincidencia semántica (sinónimos, hipónimos simples, perífrasis) para decidir si un elemento del GroundTruth está recordado (acierto) u omitido.
+    - Distingue NÚCLEO vs. NO núcleo:
+      • NÚCLEO: nombres propios, objetos/acciones principales, clima/lugar distintivos.  
+      • NO núcleo: detalles secundarios.
+    - Incertidumbre (“tal vez”, “no estoy seguro”, “no me acuerdo”, “parece que…”) se trata así:
+      • En NÚCLEO: exactitud=0.0 y omisión=1.0 para ese elemento.  
+      • En NO núcleo: exactitud=0.25 y omisión=0.75.
+    - Si el paciente menciona elementos no presentes en el GroundTruth, son comisiones.
+    - Prioriza ${palabrasClave}: las de tipo NÚCLEO pesan más tanto en omisión como en exactitud.
 
-    1. Comprende el contenido de ambos textos.
-      Identifica las personas, objetos, lugares y acciones principales presentes en el GroundTruth.
-      Realiza esta misma tarea con la descripción del paciente.
+    Cálculo de métricas (0.00–1.00, dos decimales)
+    1) rateOmision (promedio ponderado):
+      - Pondera elementos: NÚCLEO=peso 2; NO núcleo=peso 1.
+      - Para cada elemento: presente=0; incierto NÚCLEO=1.0 / NO núcleo=0.75; ausente=1.0.
+      - Promedia ponderado y redondea.
+    2) rateComision:
+      - (# elementos falsos sustantivos mencionados) / (# menciones sustantivas totales del paciente). Redondea.
+    3) rateExactitud (promedio ponderado):
+      - NÚCLEO presente con equivalencia=1.0; incierto NÚCLEO=0.0; ausente=0.
+      - NO núcleo presente=1.0; incierto NO núcleo=0.25; ausente=0.
+      - Promedio ponderado (NÚCLEO=2, NO núcleo=1) y redondea.
+    4) puntajeCoherencia: lógica, secuenciación y foco temático (no evalúa veracidad). Redondea.
+    5) puntajeFluidez: naturalidad, gramática y continuidad. Redondea.
 
-    2. Evalúa la memoria (Memory Recall):
-      - Detecta omisiones: elementos del GroundTruth que el paciente no mencionó.
-      - Detecta comisiones: elementos falsos o inexistentes agregados por el paciente.
-      - Calcula la exactitud: proporción de coincidencias semánticas entre ambas descripciones; es importante que uses tolerancia a sinónimos y expresiones similares.
-      - Asigna:
-        - rateOmision: 0.0 (sin omisiones) a 1.0 (olvidó todo).
-        - rateComision: 0.0 (sin falsos) a 1.0 (muchos falsos).
-        - rateExactitud: 0.0 (ninguna coincidencia) a 1.0 (todas correctas).
+    Penalizaciones (interno)
+    - penalIncertidumbre = 0.10 si aparece ≥1 de: “tal vez”, “no estoy seguro”, “no me acuerdo”.
+    - penalBrevedad = 0.05 si <12 tokens o <2 oraciones; si <8 tokens: 0.10.
+    - penalContradiccion = 0.05–0.10 si contradice explícitamente el GroundTruth.
+    - Límite de penalizaciones: no sumar más de 0.20 (clamp a 0.20).
 
-    3. Evalúa la coherencia y fluidez narrativa (Narrative Coherence):
-      - Determina si la historia del paciente tiene lógica, secuencia y consistencia temática.
-      - Evalúa la complejidad y naturalidad lingüística (vocabulario, estructura gramatical, fluidez).
-      - Asigna:
-        - puntajeCoherencia: 0.0 (incoherente) a 1.0 (muy coherente).
-        - puntajeFluidez: 0.0 (muy entrecortada) a 1.0 (fluida y natural).
+    Pesos (recall > narrativa)
+    - memOmis = (1 - rateOmision)
+    - memCom  = (1 - rateComision)
+    - recallCore = 0.40*memOmis + 0.35*rateExactitud + 0.15*memCom
+    - narrativa  = 0.04*puntajeCoherencia + 0.02*puntajeFluidez   ← máximo 0.06 del total
+    - puntajeBruto = recallCore + narrativa
+    - puntajePenal = puntajeBruto - (penalIncertidumbre + penalBrevedad + penalContradiccion)
 
-    4. Calcula el puntaje total (puntajeTotal) como un promedio ponderado de los demás valores, representando el desempeño general (0.0–1.0).
+    Caps (límites por cobertura de palabras clave y memoria)
+    - kwRecall (ponderado NÚCLEO): (# palabrasClave NÚCLEO bien cubiertas con equivalencia / # palabrasClave NÚCLEO), con incierto=0.
+      • Si kwRecall < 0.40 → puntajePenal = min(puntajePenal, 0.30)
+      • Si 0.40 ≤ kwRecall < 0.60 → puntajePenal = min(puntajePenal, 0.40)
+    - Cap adicional por mala memoria: si memOmis < 0.50 y rateExactitud < 0.50 → puntajePenal = min(puntajePenal, 0.40)
 
-    5. Genera las listas cualitativas:
-      - detallesOmitidos: frases breves con los hechos o detalles importantes no mencionados.
-      - palabrasClaveOmitidas: palabras relevantes del GroundTruth ausentes en la descripción.
-      - elementosComision: elementos que hayas detectado en el análisis de comisiones.
-      - aciertos: hechos, nombres o elementos correctamente recordados.
+    Puntaje final
+    - puntajeTotal = max(0.00, round(puntajePenal, 2))
 
-    6. Redacta una conclusión empática dirigida al paciente:
-      - Usa un tono cálido, positivo y motivador.
-      - Menciona lo que hizo bien, lo que puede mejorar y algo de ánimo.
-      - Evita tecnicismos, juicios clínicos o lenguaje negativo.
-      - Tu salida puede ser más descriptiva, aquí tienes un ejemplo simple:
-        “Recordaste muy bien a las personas en la foto. Se te escaparon algunos detalles, pero tu historia fue muy bonita y clara. ¡Sigue practicando, lo estás haciendo genial!”
+    Listas cualitativas
+    - detallesOmitidos: prioriza elementos NÚCLEO (personas con nombre, objetos/acciones principales, clima/lugar distintivos).
+    - palabrasClaveOmitidas: reporta todas las NÚCLEO ausentes; las NÚCLEO inciertas también se listan como omitidas.
+    - elementosComision: cada falso sustantivo (personas/objetos/acciones/lugares no existentes en el GroundTruth).
+    - aciertos: solo elementos correctamente recordados; marca “incierto” únicamente en NO núcleo.
 
-    7. Ten muy en cuenta que esta comparación es para que el médico del paciente pueda recetar y dar veredictos.
-    Por tanto es muy importante que la puntuación sea muy estricta, en puntos como el rate de omision, rate de comision, rate de exactitud, y estricta en palabras clave omitidas y aciertos, de modo que estos sean los indicadores que más peso tengan
-    a la hora de calcular el puntaje total.
-
-    Usa valores numéricos entre 0.0 y 1.0 con máximo dos decimales de precisión.
-    No incluyas explicaciones ni texto adicional fuera del resultado estructurado.
+    Conclusión empática (dirigida al paciente):
+    - Usa un tono cálido, amigable, positivo y motivador. 
+    - Menciona lo que hizo bien, lo que puede mejorar y algo de ánimo. 
+    - Evita tecnicismos, juicios clínicos o lenguaje negativo. 
+    - Tu salida puede ser más descriptiva, aquí tienes un ejemplo simple: 
+    “Recordaste muy bien a las personas en la foto. Se te escaparon algunos detalles como que ese día comieron perros calientes, pero tu historia fue clara. 
+    ¡Sigue practicando, puedes mejorar mucho!”
     `;
   }
 
