@@ -48,6 +48,7 @@ export class DescripcionesImagenesController {
           idCuidador: idUsuario,
           idAsset: imagen.asset_id,
           idPublicImage: imagen.public_id,
+          idSesion: null,
           formato: imagen.format
         }
       ]
@@ -136,6 +137,12 @@ export class DescripcionesImagenesController {
   listarSesiones(@Payload() sesionPaginationDto: SesionPaginationDto){
     return this.descripcionesImagenesService.listarSesiones(sesionPaginationDto.idPaciente, sesionPaginationDto);
   }
+
+  /* LISTAR SESIONES CON GT */
+  @MessagePattern({cmd:'listarSesionesGt'})
+  listarSesionesGt(@Payload() sesionPaginationDto: SesionPaginationDto){
+    return this.descripcionesImagenesService.listarSesionesConGt(sesionPaginationDto.idPaciente, sesionPaginationDto);
+  }
   
   /* LISTAR SESIONES SIN PAGINACIÓN */
   @MessagePattern({cmd:'listarSesionesCompletadas'})
@@ -144,7 +151,7 @@ export class DescripcionesImagenesController {
   }
 
   /* ACTUALZIZAR SESIÓN*/
-  @MessagePattern({cmd: 'actualizarSesion'})
+  @MessagePattern({cmd:'actualizarSesion'})
   actualizarSesion(@Payload() actualizarSesionDto: ActualizarSesionDto){
     return this.descripcionesImagenesService.actualizarSesion(actualizarSesionDto.id, actualizarSesionDto);
   }

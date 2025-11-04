@@ -1,11 +1,11 @@
 import { estado_sesion } from '@prisma/client';
-import {IsNumber, IsEnum, IsString, IsOptional} from 'class-validator';
+import {IsNumber, IsEnum, IsString, IsOptional, IsArray} from 'class-validator';
 import { estadoListDto } from '../enum/estado.enum';
 
 export class CrearSesionDto{
 
     @IsString()
-    idPaciente: string
+    idCuidador: string
 
     @IsOptional()
     fechaInicio: Date
@@ -47,4 +47,7 @@ export class CrearSesionDto{
     @IsString()
     @IsOptional()
     conclusionNormal: string
+
+    @IsArray()
+    imagenesIds: number[]
 }

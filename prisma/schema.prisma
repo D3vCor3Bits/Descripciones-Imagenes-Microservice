@@ -12,10 +12,8 @@ model DESCRIPCION {
   texto         String
   fecha         DateTime  @default(now()) @db.Timestamptz(6)
   idImagen      Int       @unique
-  idSesion      Int
   idPaciente    String?   @db.Uuid
   IMAGEN        IMAGEN    @relation(fields: [idImagen], references: [idImagen], onDelete: Cascade, onUpdate: NoAction)
-  SESION        SESION    @relation(fields: [idSesion], references: [idSesion], onDelete: Cascade, onUpdate: NoAction)
   PUNTAJE       PUNTAJE[]
 }
 
@@ -37,8 +35,10 @@ model IMAGEN {
   idPublicImage String?
   formato       String?
   idCuidador    String?      @db.Uuid
+  idSesion      Int?
   DESCRIPCION   DESCRIPCION?
   GROUNDTRUTH   GROUNDTRUTH?
+  SESION        SESION?      @relation(fields: [idSesion], references: [idSesion], onUpdate: NoAction)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -64,7 +64,7 @@ model PUNTAJE {
 model SESION {
   idSesion          Int           @id @default(autoincrement())
   fechaInicio       DateTime      @default(now()) @db.Timestamptz(6)
-  estado            estado_sesion @default(en_curso)
+  estado            estado_sesion @default(pendiente)
   sessionRecall     Float
   sessionComision   Float
   sessionCoherencia Float
@@ -74,7 +74,7 @@ model SESION {
   conclusionNormal  String        @default("")
   sessionOmision    Float?        @default(0)
   idPaciente        String?       @db.Uuid
-  DESCRIPCION       DESCRIPCION[]
+  IMAGEN            IMAGEN[]
 }
 
 model VW_PromediosPorSesion {

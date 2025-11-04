@@ -17,6 +17,9 @@ export class ImagenItemDto{
     @IsString()
     idPublicImage: string;
 
+    @IsNumber()
+    idSesion: number | null;
+
     @IsString()
     formato: string;
 }

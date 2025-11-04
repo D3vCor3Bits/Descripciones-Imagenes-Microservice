@@ -15,8 +15,4 @@ export class CrearDescriptionDto{
     @IsNumber()
     @IsPositive()
     idImagen: number
-
-    @IsNumber()
-    @IsPositive()
-    idSesion: number
 }
