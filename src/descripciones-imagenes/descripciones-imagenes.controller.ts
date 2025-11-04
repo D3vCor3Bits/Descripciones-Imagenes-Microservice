@@ -1,5 +1,5 @@
-import { Controller, ParseIntPipe, ParseUUIDPipe } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { Controller, HttpStatus, ParseIntPipe, ParseUUIDPipe } from '@nestjs/common';
+import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
 import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
@@ -34,7 +34,12 @@ export class DescripcionesImagenesController {
       buffer,
     } as Express.Multer.File;
 
-    const imagen = await this.descripcionesImagenesService.uploadFile(file);
+    const response = await this.descripcionesImagenesService.validaUsuarioId(idUsuario);
+    if (!response || !['cuidador', 'administrador'].includes(response.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'La persona que sube la imagen debe ser cuidador o administrador'});
+    }
+
+    const imagen = await this.descripcionesImagenesService.uploadFile(file)
     const imagenPayload: CrearImagenDto = {
       imagenes: [
         {
