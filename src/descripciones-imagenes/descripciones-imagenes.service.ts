@@ -2,7 +2,7 @@ import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/co
 import { estado_sesion, PrismaClient } from '@prisma/client';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryResponse } from './imageProvider/cloudinary-response';
-import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
+import { ActualizarGroundTruthDto, ActualizarImagenDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { GoogleGenAI, Type} from '@google/genai'
 import { envs, NATS_SERVICE } from 'src/config';
@@ -74,7 +74,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     if (response.usuarios.length == 0) {
       throw new RpcException({
         status: HttpStatus.NOT_FOUND,
-        message: 'Cuidador no encontrado'
+        message: 'Usuario no encontrado'
       });
     }
     return response.usuarios[0];
@@ -91,6 +91,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           idCuidador: payload.idCuidador,
           idAsset: payload.idAsset,
           idPublicImage: payload.idPublicImage,
+          idSesion: null,
           formato: payload.formato
         }
       })
@@ -186,7 +187,21 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     };
   }
 
-
+  /* ACTUALIZAR IMAGEN */
+  async actualizarImagen(id:number, actualizarImagenDto:ActualizarImagenDto){
+    const {idImagen:__, ...data} =actualizarImagenDto
+    await this.buscarImagen(id);
+    try {
+      return this.iMAGEN.update({
+        where: {
+          idImagen: id
+        },
+        data: data
+      }) 
+    } catch (error) {
+      throw new RpcException(error);
+    }
+  }
 
   /*-------------------------------------------------------------------------*/
   /*------------------------------GROUNDTRUTH--------------------------------*/
@@ -195,8 +210,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /* FUNCIÓN PARA CREAR GROUNDTRUTH*/
 
   async crearGroundTruth(crearGroundTruthDto: CrearGroundTruthDto){
-      //TODO: Verificar idUsuario
-
       //Verificar idImagen
       const idImagen = crearGroundTruthDto.idImagen;
       const imagen = await this.buscarImagen(idImagen);
@@ -342,14 +355,18 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /* CREAR SESIÓN */
   async crearSesion(crearSesionDto: CrearSesionDto){
     try {
-      //Verificar existencia del idPaciente en la bd de usuarios
-      const paciente = null; 
-      //Validación del paciente
-      //---
-
+      const usuario = await this.validaUsuarioId(crearSesionDto.idCuidador);
+      if(!['cuidador', 'administrador'].includes(usuario.rol)){
+        throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'La persona que crea la sesión debe ser cuidador o administrador'})
+      }
+      const idCuidador = usuario.idUsuario;
+      const pacienteCuidador = await firstValueFrom(this.client.send(
+        {cmd:'pacienteCuidador'},
+        {idCuidador}
+      ));
       const sesion = await this.sESION.create({
         data:{
-          idPaciente: crearSesionDto.idPaciente,
+          idPaciente: pacienteCuidador[0].idPaciente,
           sessionCoherencia: 0,
           sessionComision: 0,
           sessionOmision: 0,
@@ -359,6 +376,15 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           conclusionNormal: "No se ha proporcionado todavía"
         }
       })
+      // Asociar las imágenes a la sesión recién creada.
+      // usar Promise.all para ejecutar actualizaciones en paralelo y asegurar que las llamadas async se ejecuten
+      if (Array.isArray(crearSesionDto.imagenesIds) && crearSesionDto.imagenesIds.length > 0) {
+        await Promise.all(
+          crearSesionDto.imagenesIds.map(imagenId =>
+            this.actualizarImagen(imagenId, { idImagen: imagenId, idSesion: sesion.idSesion })
+          )
+        );
+      }
 
       return sesion;
     } catch (error) {
@@ -371,7 +397,10 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /* CANTIDAD DE SESION POR PARCIENTE #*/
   async cantidadSesionesPaciente(idPaciente: string){
-    //Verificar paciente
+    const usuario = await this.validaUsuarioId(idPaciente);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
 
     const cantSesiones = await this.sESION.count({
       where: {
@@ -386,10 +415,35 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /* TRAER SOLAMENTE EL BASELINE DEL PACIENTE, ES DECIR, LA PRIMERA SESIÓN */
   async baseline(idPaciente: string){
-
+    const usuario = await this.validaUsuarioId(idPaciente);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
     const baseline = await this.sESION.findFirst({
       where: {
         idPaciente: idPaciente
+      },
+      include: {
+        IMAGEN: {
+          select: {
+            urlImagen: true,
+            fechaSubida: true,
+            DESCRIPCION: {
+              select:{
+                texto: true,
+                fecha: true
+              }
+            },
+            GROUNDTRUTH: {
+              select:{
+                texto: true,
+                fecha: true,
+                palabrasClave: true,
+                preguntasGuiaPaciente: true
+              }
+            }
+          }
+        }
       }
     })
 
@@ -399,7 +453,10 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /* BUSCAR SESIONES DEL PACIENTE ESPECIFICAMENTE*/
   async listarSesiones(idPaciente:string, sesionPaginationDto: SesionPaginationDto){
     const {idPaciente:__, ...data} = sesionPaginationDto
-
+    const usuario = await this.validaUsuarioId(idPaciente);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
     const totalPages = await this.sESION.count({
       where: {
         estado: data.estado_sesion,
@@ -416,8 +473,78 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         take: perPage,
         where: {
           estado: data.estado_sesion,
-          idPaciente: idPaciente
+          idPaciente: idPaciente,
+        },
+        include: {
+          IMAGEN: {
+            select: {
+              urlImagen: true,
+              fechaSubida: true,
+              DESCRIPCION: {
+                select:{
+                  texto: true,
+                  fecha: true
+                }
+              }
+          }
         }
+      }
+      }),
+      meta: {
+        total: totalPages,
+        page: currentPage,
+        lastPage: Math.ceil(totalPages/perPage)
+      }
+    }
+
+  }
+
+  async listarSesionesConGt(idPaciente:string, sesionPaginationDto: SesionPaginationDto){
+    const {idPaciente:__, ...data} = sesionPaginationDto
+    const usuario = await this.validaUsuarioId(idPaciente);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
+    const totalPages = await this.sESION.count({
+      where: {
+        estado: data.estado_sesion,
+        idPaciente: idPaciente
+      }
+    })
+
+    const currentPage = Number(data.page);
+    const perPage = Number(data.limit);
+
+    return {
+      data: await this.sESION.findMany({
+        skip: (currentPage-1)*perPage,
+        take: perPage,
+        where: {
+          estado: data.estado_sesion,
+          idPaciente: idPaciente,
+        },
+        include: {
+          IMAGEN: {
+            select: {
+              urlImagen: true,
+              fechaSubida: true,
+              DESCRIPCION: {
+                select:{
+                  texto: true,
+                  fecha: true
+                }
+              },
+              GROUNDTRUTH: {
+                select:{
+                  texto: true,
+                  fecha: true,
+                  palabrasClave: true,
+                  preguntasGuiaPaciente: true
+                }
+              }
+          }
+        }
+      }
       }),
       meta: {
         total: totalPages,
@@ -431,7 +558,10 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /*LISTAR TODAS LAS SESIONES DE UN PACIENTE SIN PAGINACIÓN*/
   async listarSesionesPacienteCompletadas(idPaciente: string){
     //Validar id paciente
-    console.log("ENTRE ACA")
+    const usuario = await this.validaUsuarioId(idPaciente);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
     try {
       const sesiones = await this.sESION.findMany({
         where: {
@@ -451,6 +581,15 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     const sesion = await this.sESION.findFirst({
       where: {
         idSesion: id
+      },
+      include: {
+        IMAGEN: {
+          select: {
+            urlImagen: true,
+            fechaSubida: true,
+            DESCRIPCION: true
+          }
+        }
       }
     })
     if(!sesion){
@@ -464,9 +603,22 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /* BUSCAR SESIÓN POR ID DE PACIENTE*/
   async buscarSesionPaciente(id: string){
+    const usuario = await this.validaUsuarioId(id);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
     const sesion = await this.sESION.findFirst({
       where: {
         idPaciente: id
+      },
+      include: {
+        IMAGEN: {
+          select: {
+            urlImagen: true,
+            fechaSubida: true,
+            DESCRIPCION: true
+          }
+        }
       }
     })
     if(!sesion){
@@ -514,6 +666,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         detallesOmitidos: crearPuntajeI.detallesOmitidos,
         palabrasClaveOmitidas: crearPuntajeI.palabrasClaveOmitidas,
         aciertos: crearPuntajeI.aciertos,
+        elementosComision: crearPuntajeI.elementosComision,
         conclusion: crearPuntajeI.conclusion
       }
     })
@@ -538,7 +691,10 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
     //Validar idPaciente
     const idPaciente = crearDescripcionDto.idPaciente;
-    const paciente = this.client.send({ cmd : 'findUserById'}, {idPaciente})
+    const usuario = await this.validaUsuarioId(idPaciente);
+    if ( !['paciente'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'La persona que describe una imagen debe ser un paciente'});
+    }
 
     //Numero de sesionesPaciente
     const numeroSesiones = await this.sESION.count({
@@ -551,16 +707,11 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     const idImagen = crearDescripcionDto.idImagen;
     await this.buscarImagen(idImagen);
 
-    //Validación idSesion
-    const idSesion = crearDescripcionDto.idSesion;
-    await this.buscarSesion(idSesion);
+
+
     const sesion = await this.buscarSesionPaciente(idPaciente);
-    if(crearDescripcionDto.idSesion != sesion.idSesion){
-      throw new RpcException({
-        status: HttpStatus.BAD_REQUEST,
-        message: "La sesión que está describiendo no está asociada al paciente indicado"
-      })
-    }
+    const idSesion = sesion.idSesion;
+
 
       //Validamos estado  sesion
     if (sesion.estado == estado_sesion.completado){
@@ -575,16 +726,14 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       texto: crearDescripcionDto.texto,
       idPaciente: crearDescripcionDto.idPaciente,
       idImagen: crearDescripcionDto.idImagen,
-      idSesion: crearDescripcionDto.idSesion,
     }
     })
 
-    //Contamos descripciones
+    //Contamos las imagenes descritas
+ 
     const numeroDescripciones = await this.dESCRIPCION.count({
-      where:{
-        idSesion: idSesion
-      }
-    })
+      where: { IMAGEN: { idSesion: idSesion } }
+    });
     
     //Buscamos groundTruth
     const groundTruthDelaImagen = await this.gROUNDTRUTH.findFirst({
@@ -621,11 +770,12 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       const rows = await this.pUNTAJE.findMany({
         where:{
           DESCRIPCION:{
-            idSesion:idSesion,
-          },
+            IMAGEN: { idSesion: idSesion }
+          }
         },
         select: {conclusion: true}
       });
+      console.log(rows)
       //Aplanamos la salida para que solo sea un arreglo de strings
       const conclusiones = rows.flatMap(r => r.conclusion ? [r.conclusion] : []); 
       //Crear el Dto para actualizar
@@ -649,19 +799,12 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       //Se llama a la función de actualizar ya existente
       await this.actualizarSesion(idSesion, sesionActualizar);
 
-      if(numeroSesiones == 1){
-        this.client.emit({cmd:'generarAvisoBaseline'}, {
-
-        })
-      }
-
+      //TODO GENERAR EL AVISO DEL BASELINE EN CASO DE QUE LA SESIÓN SEA LA 1
     }
-    
     return {
       descripcion: descripcion,
       resultados: resultadoComparativa
     };
-     
   }
 
 
@@ -670,6 +813,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     const descripcion = await this.dESCRIPCION.findFirst({
       where:{
         idDescripcion: id
+      },
+      include:{
+        PUNTAJE: true
       }
     })
 
@@ -689,7 +835,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
     const totalPages = await this.dESCRIPCION.count({
       where: {
-        idSesion: descripcionesPaginationDto.idSesion
+        IMAGEN: { idSesion: descripcionesPaginationDto.idSesion }
       }
     })
 
@@ -701,7 +847,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         skip: (currentPage-1)*perPage,
         take: perPage,
         where: {
-          idSesion: descripcionesPaginationDto.idSesion
+          IMAGEN: { idSesion: descripcionesPaginationDto.idSesion }
         }
       }),
       meta: {
@@ -896,6 +1042,10 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       - Evita tecnicismos, juicios clínicos o lenguaje negativo.
       - Tu salida puede ser más descriptiva, aquí tienes un ejemplo simple:
         “Recordaste muy bien a las personas en la foto. Se te escaparon algunos detalles, pero tu historia fue muy bonita y clara. ¡Sigue practicando, lo estás haciendo genial!”
+
+    7. Ten muy en cuenta que esta comparación es para que el médico del paciente pueda recetar y dar veredictos.
+    Por tanto es muy importante que la puntuación sea muy estricta, en puntos como el rate de omision, rate de comision, rate de exactitud, y estricta en palabras clave omitidas y aciertos, de modo que estos sean los indicadores que más peso tengan
+    a la hora de calcular el puntaje total.
 
     Usa valores numéricos entre 0.0 y 1.0 con máximo dos decimales de precisión.
     No incluyas explicaciones ni texto adicional fuera del resultado estructurado.
