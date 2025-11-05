@@ -20,6 +20,15 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   private readonly logger = new Logger('DescImagesService');
   private readonly gemini: GoogleGenAI
 
+  // Helper to normalize/parse date inputs and ensure we always send an explicit Date
+  private parseDate(input?: string | Date | null): Date | undefined {
+    // Treat null or undefined as absent
+    if (input == null) return undefined;
+    if (input instanceof Date) return input;
+    // For numbers and strings, let JS parse them
+    return new Date(input as any);
+  }
+
   constructor(@Inject(NATS_SERVICE) private readonly client: ClientProxy){
     super();
     const geminiApiKey = envs.geminiApiKey;
@@ -88,6 +97,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       return await this.iMAGEN.create({
         data:{
           urlImagen: payload.urlImagen,
+          fechaSubida: this.parseDate((payload as any).fechaSubida) ?? new Date(),
           idCuidador: payload.idCuidador,
           idAsset: payload.idAsset,
           idPublicImage: payload.idPublicImage,
@@ -224,6 +234,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         return await this.gROUNDTRUTH.create({
           data:{
             texto: crearGroundTruthDto.texto,
+            fecha: this.parseDate((crearGroundTruthDto as any).fecha) ?? new Date(),
             idImagen: crearGroundTruthDto.idImagen,
             palabrasClave: crearGroundTruthDto.palabrasClave,
             preguntasGuiaPaciente: crearGroundTruthDto.preguntasGuiaPaciente
@@ -347,7 +358,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       message: "Verdad absoluta eliminada correctamente"
     };
   }
-
+ 
   /*-------------------------------------------------------------------------*/
   /*---------------------------------SESIONES--------------------------------*/
   /*-------------------------------------------------------------------------*/
@@ -364,16 +375,50 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         {cmd:'pacienteCuidador'},
         {idCuidador}
       ));
+      if(pacienteCuidador.length == 0){
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: "No hay un paciente asociado a este cuidador"
+        })
+      }
+      // Validar imágenes: existen, no tienen idSesion asignado y pertenecen al cuidador que crea la sesión
+      if (Array.isArray(crearSesionDto.imagenesIds) && crearSesionDto.imagenesIds.length > 0) {
+        await Promise.all(
+          crearSesionDto.imagenesIds.map(async (imagenId) => {
+            // buscarImagen lanzará RpcException si no existe
+            const imagen = await this.buscarImagen(imagenId);
+            // validar que la imagen no esté ya asignada a otra sesión
+            if (imagen.idSesion) {
+              throw new RpcException({
+                status: HttpStatus.BAD_REQUEST,
+                message: `La imagen ya está asignada a la sesión ${imagen.idSesion}`
+              });
+            }
+            // validar que la imagen pertenezca al cuidador que está creando la sesión
+            if (!imagen.idCuidador || imagen.idCuidador !== idCuidador) {
+              throw new RpcException({
+                status: HttpStatus.BAD_REQUEST,
+                message: `La imagen no fue subida por el cuidador que intenta crear la sesión`
+              });
+            }
+          })
+        );
+      }
+
       const sesion = await this.sESION.create({
         data:{
           idPaciente: pacienteCuidador[0].idPaciente,
+          fechaCreacion: this.parseDate((crearSesionDto as any).fechaCreacion) ?? new Date(),
+          ...((this.parseDate((crearSesionDto as any).fechaInicioPropuesta)) ? { fechaInicioPropuesta: this.parseDate((crearSesionDto as any).fechaInicioPropuesta) } : {}),
           sessionCoherencia: 0,
           sessionComision: 0,
           sessionOmision: 0,
           sessionRecall: 0,
           sessionTotal: 0,
           conclusionTecnica: "No se ha proporcionado todavía",
-          conclusionNormal: "No se ha proporcionado todavía"
+          conclusionNormal: "No se ha proporcionado todavía",
+          fechaInicioPropuesta: crearSesionDto.fechaInicioPropuesta ?? null,
+          activacion: false,
         }
       })
       // Asociar las imágenes a la sesión recién creada.
@@ -390,7 +435,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     } catch (error) {
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: error
+        message: error.message
       })
     }
   }
@@ -663,6 +708,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         puntajeCoherencia: crearPuntajeI.puntajeCoherencia,
         puntajeFluidez: crearPuntajeI.puntajeFluidez,
         puntajeTotal: crearPuntajeI.puntajeTotal,
+        fechaCalculo: this.parseDate((crearPuntajeI as any).fechaCalculo) ?? new Date(),
         detallesOmitidos: crearPuntajeI.detallesOmitidos,
         palabrasClaveOmitidas: crearPuntajeI.palabrasClaveOmitidas,
         aciertos: crearPuntajeI.aciertos,
@@ -737,6 +783,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     const descripcion = await this.dESCRIPCION.create({
     data: {
       texto: crearDescripcionDto.texto,
+      fecha: this.parseDate((crearDescripcionDto as any).fecha) ?? new Date(),
       idPaciente: crearDescripcionDto.idPaciente,
       idImagen: crearDescripcionDto.idImagen,
     }
