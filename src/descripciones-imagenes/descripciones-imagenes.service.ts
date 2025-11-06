@@ -168,11 +168,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     return imagen;
   }
 
-  //TODO: MIRAR SI SE HACE ACTUALIZAR IMAGEN
-  update(id: number, updateDescripcionesImageneDto: any) {
-    return `This action updates a #${id} descripcionesImagene`;
-  }
-
   /* ELIMINAR IMAGEN */
   async eliminarImagen(id: number) {
     const imagen = await this.buscarImagen(id);
@@ -200,16 +195,53 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /* ACTUALIZAR IMAGEN */
   async actualizarImagen(id:number, actualizarImagenDto:ActualizarImagenDto){
     const {idImagen:__, ...data} =actualizarImagenDto
-    await this.buscarImagen(id);
-    try {
-      return this.iMAGEN.update({
+    if(data.idSesion){
+      const sesionLlegada = await this.buscarSesion(data.idSesion);
+      const idSesionLlegada = sesionLlegada.idSesion;
+      const imagen = await this.buscarImagen(id);
+      const sesionIdImagenActual = imagen.idSesion;
+      if(sesionLlegada.estado == estado_sesion.completado){
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: "No es posible actualizar el id de sesión de una imágen a una sesión completada"
+        })
+      }
+      if(sesionIdImagenActual != null){
+        const sesion = await this.buscarSesion(sesionIdImagenActual);
+        if(sesion.estado == estado_sesion.completado){
+          throw new RpcException({
+            status: HttpStatus.BAD_REQUEST,
+            message: "No es posible actualizar el id de sesión de una imágen si la sesión en la que está ya fue completada"
+          })
+        }
+      }
+      const numeroImagenesConSesionLlegada = await this.iMAGEN.count({
         where: {
-          idImagen: id
-        },
-        data: data
-      }) 
-    } catch (error) {
-      throw new RpcException(error);
+          idSesion: idSesionLlegada
+        }
+      })
+      if(numeroImagenesConSesionLlegada == 3){
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: "No es posible actualizar el id de sesión de una imágen a una sesión con 3 imágenes ya"
+        })
+      }
+
+      try {
+        return this.iMAGEN.update({
+          where: {
+            idImagen: id
+          },
+          data: data
+        }) 
+      } catch (error) {
+        throw new RpcException(error);
+      }
+    }else{
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "Solo es posible actualizar la sesión de la imágen"
+      })
     }
   }
 
@@ -379,6 +411,12 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
           message: "No hay un paciente asociado a este cuidador"
+        })
+      }
+      if(crearSesionDto.imagenesIds.length > 3){
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: "Solo es posible asociar 3 imágenes a una sesión"
         })
       }
       // Validar imágenes: existen, no tienen idSesion asignado y pertenecen al cuidador que crea la sesión
@@ -678,16 +716,57 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /*ACTUALIZAR SESIÓN*/
   async actualizarSesion(id: number, actualizarSesionDto: ActualizarSesionDto){
-    const {id:__, ...data} = actualizarSesionDto;
+      if(actualizarSesionDto.activacion == true || actualizarSesionDto.activacion == false || actualizarSesionDto.estado || actualizarSesionDto.fechaInicioPropuesta){
+      const {id:__, ...data} = actualizarSesionDto;
 
-    await this.buscarSesion(id);
+      const sesion = await this.buscarSesion(id);
+      if(sesion.estado == estado_sesion.completado){
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: "No es posible actualizar una sesión completada"
+        })
+      }
 
-    return this.sESION.update({
-      where: {
-        idSesion: id
-      },
-      data: data
-    })
+      
+      if (actualizarSesionDto.activacion === true || actualizarSesionDto.activacion === false) {
+        const sesiones = await this.sESION.findMany({
+          where: { idPaciente: sesion.idPaciente },
+          select: { idSesion: true },
+        });
+
+        if (sesion.idPaciente == null) {
+          throw new RpcException({
+            status: HttpStatus.BAD_REQUEST,
+            message: 'Error con el id del paciente',
+          });
+        }
+
+        
+        const paciente = await this.validaUsuarioId(sesion.idPaciente);
+        const index = sesiones.findIndex((s) => s.idSesion == sesion.idSesion);
+        const numSesion = index >= 0 ? index + 1 : null;
+        const cmd = actualizarSesionDto.activacion === true ? 'enviarActivacion' : 'enviarDesactivacion';
+
+        this.client.emit({cmd:cmd}, {
+          usuarioEmail: paciente.correo,
+          nombreCompleto: paciente.nombre,
+          sessionNumber: numSesion
+        });
+      }
+
+      return this.sESION.update({
+        where: {
+          idSesion: id
+        },
+        data: data
+      })
+    }else{
+      console.log(actualizarSesionDto)
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "Solo es posible actualizar los campos indicados"
+      })
+    }
   }
 
   /*-------------------------------------------------------------------------*/
@@ -1085,6 +1164,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /*---FUNCIONES PRIVADAS PARA GENERAR LOS PROMPTS A LA IA--*/
   /*--------------------------------------------------------*/
 
+  //TODO: MODIFICAR PARA QUE LA IA NO DEVUELVA NADA DE RENDIMIENTO EN EL MENSAJE AL PACIENTE
+
   private generarPromptComparacion(descripcionPaciente: string, groundTruth: string, palabrasClave: string[]){
     return `
     Eres un Analista Cognitivo Experto para una aplicación de detección de Alzheimer. Compara la Descripción del Paciente con el GroundTruth (referencia del cuidador) y devuelve solo los valores requeridos por el sistema, sin texto adicional.
@@ -1207,5 +1288,41 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
     No incluyas explicaciones adicionales ni texto fuera de estos dos campos. No agregues JSON de esquema; únicamente el contenido de ambas conclusiones.
       `.trim();    
+  }
+
+  /**
+   * Obtiene pacientes con sesiones activas y el conteo de sesiones
+   */
+  async obtenerPacientesConSesionesActivas() {
+    try {
+      const sesionesActivas = await this.sESION.groupBy({
+        by: ['idPaciente'],
+        where: {
+          activacion: true,
+          estado: {
+            in: ['en_curso']
+          },
+          idPaciente: {
+            not: null
+          }
+        },
+        _count: {
+          idSesion: true
+        }
+      });
+
+      return {
+        ok: true,
+        pacientes: sesionesActivas.map(s => ({
+          idPaciente: s.idPaciente,
+          sesionesActivas: s._count.idSesion
+        }))
+      };
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error.message || 'Error al buscar pacientes con sesiones activas',
+      });
+    }
   }
 }

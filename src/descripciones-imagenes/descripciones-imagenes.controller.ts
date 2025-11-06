@@ -1,7 +1,7 @@
 import { Controller, HttpStatus, ParseIntPipe, ParseUUIDPipe } from '@nestjs/common';
 import { MessagePattern, Payload, RpcException } from '@nestjs/microservices';
 import { DescripcionesImagenesService } from './descripciones-imagenes.service';
-import { ActualizarGroundTruthDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
+import { ActualizarGroundTruthDto, ActualizarImagenDto, CrearDescriptionDto, CrearGroundTruthDto, CrearImagenDto, CrearSesionDto, DescripcionPaginationDto, ImagenPaginationDto, SesionPaginationDto } from './dto';
 import { ActualizarSesionDto } from './dto/actualizar-sesion.dto';
 @Controller()
 export class DescripcionesImagenesController {
@@ -70,9 +70,9 @@ export class DescripcionesImagenesController {
   }
 
 
-  @MessagePattern('updateDescripcionesImagene')
-  update(@Payload() updateDescripcionesImageneDto: any) {
-    return this.descripcionesImagenesService.update(updateDescripcionesImageneDto.id, updateDescripcionesImageneDto);
+  @MessagePattern({cmd:'actualizarImagen'})
+  actualizarImagen(@Payload() actualizarImagenDto: ActualizarImagenDto){
+    return this.descripcionesImagenesService.actualizarImagen(actualizarImagenDto.idImagen, actualizarImagenDto);
   }
 
   /*ELIMINAR IMAGEN*/
@@ -190,5 +190,11 @@ export class DescripcionesImagenesController {
   @MessagePattern({cmd:'listarDescripciones'})
   listarDescripciones(@Payload() descripcionesPaginationDto: DescripcionPaginationDto){
     return this.descripcionesImagenesService.listarDescripciones(descripcionesPaginationDto);
+  }
+
+  /* OBTENER PACIENTES CON SESIONES ACTIVAS */
+  @MessagePattern({cmd:'obtenerPacientesConSesionesActivas'})
+  obtenerPacientesConSesionesActivas(){
+    return this.descripcionesImagenesService.obtenerPacientesConSesionesActivas();
   }
 }
