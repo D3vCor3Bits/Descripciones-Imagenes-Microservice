@@ -1,14 +1,12 @@
 import { estado_sesion } from '@prisma/client';
-import {IsNumber, IsEnum, IsString, IsOptional, IsArray} from 'class-validator';
+import {IsNumber, IsEnum, IsString, IsOptional, IsArray, IsDate, IsBoolean} from 'class-validator';
 import { estadoListDto } from '../enum/estado.enum';
+import { Type } from 'class-transformer';
 
 export class CrearSesionDto{
 
     @IsString()
     idCuidador: string
-
-    @IsOptional()
-    fechaInicio: Date
 
     @IsEnum(estadoListDto, {
         message: `Los status válidos son: ${estadoListDto}`
@@ -50,4 +48,13 @@ export class CrearSesionDto{
 
     @IsArray()
     imagenesIds: number[]
+
+    @IsOptional()
+    @Type(() => Date)
+    @IsDate()
+    fechaInicioPropuesta?: Date
+    
+    @IsOptional()
+    @IsBoolean()
+    activacion?: boolean
 }

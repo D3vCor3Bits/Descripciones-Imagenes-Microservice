@@ -62,19 +62,21 @@ model PUNTAJE {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model SESION {
-  idSesion          Int           @id @default(autoincrement())
-  fechaInicio       DateTime      @default(now()) @db.Timestamptz(6)
-  estado            estado_sesion @default(pendiente)
-  sessionRecall     Float
-  sessionComision   Float
-  sessionCoherencia Float
-  sessionTotal      Float
-  conclusionTecnica String?
-  sessionFluidez    Float         @default(0)
-  conclusionNormal  String        @default("")
-  sessionOmision    Float?        @default(0)
-  idPaciente        String?       @db.Uuid
-  IMAGEN            IMAGEN[]
+  idSesion             Int           @id @default(autoincrement())
+  fechaInicioPropuesta DateTime?     @db.Timestamptz(6)
+  estado               estado_sesion @default(pendiente)
+  sessionRecall        Float
+  sessionComision      Float
+  sessionCoherencia    Float
+  sessionTotal         Float
+  conclusionTecnica    String?
+  sessionFluidez       Float         @default(0)
+  conclusionNormal     String        @default("")
+  sessionOmision       Float?        @default(0)
+  idPaciente           String?       @db.Uuid
+  fechaCreacion        DateTime?     @db.Timestamptz(6)
+  activacion           Boolean?      @default(false)
+  IMAGEN               IMAGEN[]
 }
 
 model VW_PromediosPorSesion {
