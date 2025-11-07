@@ -25,6 +25,7 @@ describe('DescripcionesImagenesController', () => {
     crearDescripcion: jest.fn(),
     buscarDescripcion: jest.fn(),
     listarDescripciones: jest.fn(),
+    validaUsuarioId: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -94,6 +95,7 @@ describe('DescripcionesImagenesController', () => {
 
       mockService.uploadFile.mockResolvedValue(mockCloudinaryResponse);
       mockService.create.mockResolvedValue(mockImagenCreada);
+      mockService.validaUsuarioId.mockResolvedValue({ rol: 'cuidador' });
 
       // Act
       const resultado = await controller.uploadImage(payload);
@@ -151,7 +153,7 @@ describe('DescripcionesImagenesController', () => {
     it('debe llamar al servicio con parámetros de paginación', async () => {
       // Arrange
       const paginationDto = {
-        cuidadorId: 123,
+        cuidadorId: '123',
         page: 1,
         limit: 10,
       };
@@ -299,7 +301,7 @@ describe('DescripcionesImagenesController', () => {
     it('debe llamar al servicio con parámetros de paginación', async () => {
       // Arrange
       const paginationDto = {
-        idPaciente: 1,
+        idPaciente: 'uuid-123',
         page: 1,
         limit: 10,
         estado_sesion: 'en_progreso' as any,
