@@ -65,7 +65,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
       data: {
         urlImagen: 'https://test.cloudinary.com/test-image.jpg',
         fechaSubida: new Date(),
-        idCuidador: 999,
+        idCuidador: '00000000-0000-0000-0000-000000000001', // UUID válido
         idAsset: 'test-asset-e2e',
         idPublicImage: 'test-public-e2e',
         formato: 'jpg',
@@ -75,8 +75,8 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
 
     const sesion = await prisma.sESION.create({
       data: {
-        idPaciente: 999,
-        fechaInicio: new Date(),
+        idPaciente: '00000000-0000-0000-0000-000000000002', // UUID válido
+        fechaInicioPropuesta: new Date(), // Nombre correcto del campo
         estado: 'en_curso',
         sessionRecall: 7.5,
         sessionComision: 7.0,
@@ -148,7 +148,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
       expect(response).toBeDefined();
       expect(response.idImagen).toBe(testImagenId);
       expect(response.urlImagen).toBeDefined();
-      expect(response.idCuidador).toBe(999);
+      expect(response.idCuidador).toBe('00000000-0000-0000-0000-000000000001');
     }, 30000);
 
     it('debe listar imágenes de un cuidador con paginación', async () => {
@@ -156,7 +156,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
       const paginationDto = {
         page: 1,
         limit: 10,
-        cuidadorId: 999, // ⚠️ Campo correcto según ImagenPaginationDto
+        cuidadorId: '00000000-0000-0000-0000-000000000001', // UUID válido
       };
 
       // Act
@@ -217,7 +217,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
       // Assert
       expect(response).toBeDefined();
       expect(response.idSesion).toBe(testSesionId);
-      expect(response.idPaciente).toBe(999);
+      expect(response.idPaciente).toBe('00000000-0000-0000-0000-000000000002');
       expect(response.estado).toBe('en_curso');
     }, 30000);
 
@@ -226,7 +226,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
       const paginationDto = {
         page: 1,
         limit: 10,
-        idPaciente: 999,
+        idPaciente: '00000000-0000-0000-0000-000000000002', // UUID válido
       };
 
       // Act
@@ -280,7 +280,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
         data: {
           urlImagen: 'https://test.com/imagen-descripcion.jpg',
           fechaSubida: new Date(),
-          idCuidador: 999,
+          idCuidador: '00000000-0000-0000-0000-000000000001', // UUID válido
           idAsset: 'asset-desc-123',
           idPublicImage: 'public-desc-123',
           formato: 'jpg',
@@ -310,8 +310,8 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
     it('debe crear una descripción y calcular puntaje automáticamente', async () => {
       // Arrange
       const crearDescripcionDto = {
-        idPaciente: 999,
-        idImagen: nuevaImagenId, // ⚠️ Usar la nueva imagen (idImagen es UNIQUE)
+        idPaciente: '00000000-0000-0000-0000-000000000002', // UUID válido
+        idImagen: nuevaImagenId, // Usar la nueva imagen (idImagen es UNIQUE)
         idSesion: testSesionId,
         texto: 'Un perro jugando en el parque con una pelota',
       };
@@ -384,7 +384,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
         data: {
           urlImagen: 'https://test.com/imagen-flujo.jpg',
           fechaSubida: new Date(),
-          idCuidador: 999,
+          idCuidador: '00000000-0000-0000-0000-000000000001', // UUID válido
           idAsset: 'asset-flujo-456',
           idPublicImage: 'public-flujo-456',
           formato: 'jpg',
@@ -420,7 +420,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
 
       // 3. Crear una nueva descripción
       const crearDescripcionDto = {
-        idPaciente: 999,
+        idPaciente: '00000000-0000-0000-0000-000000000002', // UUID válido
         idImagen: imagenFlujo.idImagen,
         idSesion: testSesionId,
         texto: 'Un canino corriendo alegremente',
@@ -430,7 +430,7 @@ describe('DescripcionesImagenesMS E2E Tests', () => {
         client.send({ cmd: 'crearDescripcion' }, crearDescripcionDto),
       );
       expect(descripcionResponse.descripcion).toBeDefined();
-      expect(descripcionResponse.resultados).toBeDefined(); // ⚠️ Campo correcto es "resultados"
+      expect(descripcionResponse.resultados).toBeDefined();
       expect(descripcionResponse.resultados.puntajeTotal).toBeDefined();
 
       // 4. Verificar que se creó el puntaje en BD

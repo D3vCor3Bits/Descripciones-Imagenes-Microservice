@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DescripcionesImagenesService } from '../src/descripciones-imagenes/descripciones-imagenes.service';
 import { RpcException } from '@nestjs/microservices';
 import { HttpStatus } from '@nestjs/common';
+import { of } from 'rxjs';
 
 describe('DescripcionesImagenesService', () => {
   let service: DescripcionesImagenesService;
@@ -40,6 +41,11 @@ describe('DescripcionesImagenesService', () => {
     },
   };
 
+  const mockNatsClient = {
+    send: jest.fn().mockReturnValue(of({ usuarios: [{ rol: 'cuidador' }] })),
+    emit: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Limpiar todos los mocks antes de cada test
     jest.clearAllMocks();
@@ -47,6 +53,10 @@ describe('DescripcionesImagenesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DescripcionesImagenesService,
+        {
+          provide: 'NATS_SERVICE',
+          useValue: mockNatsClient,
+        },
       ],
     }).compile();
 
@@ -115,10 +125,11 @@ describe('DescripcionesImagenesService', () => {
           {
             urlImagen: 'https://test.com/image.jpg',
             fechaSubida: new Date('2024-01-01'),
-            idCuidador: 123,
+            idCuidador: '123',
             idAsset: 'asset123',
             idPublicImage: 'public123',
             formato: 'jpg',
+            idSesion: null,
           },
         ],
       };
@@ -142,6 +153,8 @@ describe('DescripcionesImagenesService', () => {
           idAsset: crearImagenDto.imagenes[0].idAsset,
           idPublicImage: crearImagenDto.imagenes[0].idPublicImage,
           formato: crearImagenDto.imagenes[0].formato,
+          fechaSubida: crearImagenDto.imagenes[0].fechaSubida,
+          idSesion: crearImagenDto.imagenes[0].idSesion,
         },
       });
     });
@@ -153,10 +166,11 @@ describe('DescripcionesImagenesService', () => {
           {
             urlImagen: 'https://test.com/image.jpg',
             fechaSubida: new Date('2024-01-01'),
-            idCuidador: 123,
+            idCuidador: '123',
             idAsset: 'asset123',
             idPublicImage: 'public123',
             formato: 'jpg',
+            idSesion: null,
           },
         ],
       };
@@ -174,7 +188,7 @@ describe('DescripcionesImagenesService', () => {
     it('debe retornar lista paginada de imágenes', async () => {
       // Arrange
       const imagenPaginationDto = {
-        cuidadorId: 123,
+        cuidadorId: '123',
         page: 1,
         limit: 10,
       };
@@ -291,23 +305,33 @@ describe('DescripcionesImagenesService', () => {
     it('debe crear una sesión correctamente', async () => {
       // Arrange
       const crearSesionDto = {
-        idPaciente: 1,
+        idCuidador: 'uuid-cuidador',
         fechaInicio: new Date(),
+        imagenesIds: [],
       };
 
       const mockSesion = {
         idSesion: 1,
-        ...crearSesionDto,
+        idPaciente: 'uuid-paciente',
+        fechaCreacion: expect.any(Date),
         estado: 'en_progreso',
-        sessionRecall: null,
-        sessionComision: null,
-        sessionOmision: null,
-        sessionCoherencia: null,
-        sessionFluidez: null,
-        sessionTotal: null,
-        conclusionTecnica: null,
-        conclusionNormal: null,
+        sessionRecall: 0,
+        sessionComision: 0,
+        sessionOmision: 0,
+        sessionCoherencia: 0,
+        sessionFluidez: 0,
+        sessionTotal: 0,
+        conclusionTecnica: "No se ha proporcionado todavía",
+        conclusionNormal: "No se ha proporcionado todavía",
       };
+
+      // Mock para validaUsuarioId
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: 'uuid-cuidador' }] 
+      }));
+      
+      // Mock para pacienteCuidador
+      mockNatsClient.send.mockReturnValueOnce(of([{ idPaciente: 'uuid-paciente' }]));
 
       mockPrismaClient.sESION.create.mockResolvedValue(mockSesion);
 
@@ -374,6 +398,7 @@ describe('DescripcionesImagenesService', () => {
       expect(resultado).toEqual(mockDescripcion);
       expect(mockPrismaClient.dESCRIPCION.findFirst).toHaveBeenCalledWith({
         where: { idDescripcion: 1 },
+        include: { PUNTAJE: true },
       });
     });
 

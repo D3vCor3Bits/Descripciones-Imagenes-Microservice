@@ -166,6 +166,17 @@ export class DescripcionesImagenesController {
     return this.descripcionesImagenesService.baseline(idPaciente);
   }
 
+  @MessagePattern({cmd:'totalSesiones'})
+  totalSesiones(){
+    return this.descripcionesImagenesService.totalSesiones();
+  }
+
+  /* AGREGAR NOTAS DEL MÉDICO A UNA SESIÓN */
+  @MessagePattern({cmd:'agregarNotasMedico'})
+  agregarNotasMedico(@Payload() payload: { idSesion: number, notasMedico: string }){
+    return this.descripcionesImagenesService.agregarNotasMedico(payload.idSesion, payload.notasMedico);
+  }
+
   /*-------------------------------------------------------------------------*/
   /*---------------------------------DESCRIPCIÓN--------------------------------*/
   /*-------------------------------------------------------------------------*/

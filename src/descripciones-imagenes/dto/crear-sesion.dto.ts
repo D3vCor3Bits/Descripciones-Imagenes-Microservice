@@ -57,4 +57,13 @@ export class CrearSesionDto{
     @IsOptional()
     @IsBoolean()
     activacion?: boolean
+
+    @IsString()
+    @IsOptional()
+    notasMedico?: string
+
+    @IsOptional()
+    @Type(() => Date)
+    @IsDate()
+    fechaRevisionMedico?: Date
 }

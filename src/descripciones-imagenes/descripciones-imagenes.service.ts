@@ -457,6 +457,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           conclusionNormal: "No se ha proporcionado todavía",
           fechaInicioPropuesta: crearSesionDto.fechaInicioPropuesta ?? null,
           activacion: false,
+          notasMedico: "No hay notas aún",
+          fechaRevisionMedico: null,
         }
       })
       // Asociar las imágenes a la sesión recién creada.
@@ -716,7 +718,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
   /*ACTUALIZAR SESIÓN*/
   async actualizarSesion(id: number, actualizarSesionDto: ActualizarSesionDto){
-      if(actualizarSesionDto.activacion == true || actualizarSesionDto.activacion == false || actualizarSesionDto.estado || actualizarSesionDto.fechaInicioPropuesta){
+      if(actualizarSesionDto.activacion == true || actualizarSesionDto.activacion == false || actualizarSesionDto.estado || actualizarSesionDto.fechaInicioPropuesta || actualizarSesionDto.notasMedico || actualizarSesionDto.fechaRevisionMedico){
       const {id:__, ...data} = actualizarSesionDto;
 
       const sesion = await this.buscarSesion(id);
@@ -766,6 +768,59 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         status: HttpStatus.BAD_REQUEST,
         message: "Solo es posible actualizar los campos indicados"
       })
+    }
+  }
+
+
+  async totalSesiones(){
+    try {
+      const totalSesiones = await this.sESION.count({})
+      return {
+        sesiones: totalSesiones
+      };
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: error.message
+      })
+    }
+  }
+
+  /* AGREGAR NOTAS DEL MÉDICO A UNA SESIÓN */
+  async agregarNotasMedico(idSesion: number, notasMedico: string) {
+    try {
+      // Verificar que la sesión existe
+      const sesion = await this.buscarSesion(idSesion);
+
+      // Validar que la sesión está completada
+      if (sesion.estado !== estado_sesion.completado) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Solo se pueden agregar notas a sesiones completadas'
+        });
+      }
+
+      // Actualizar notas y fecha de revisión
+      const sesionActualizada = await this.sESION.update({
+        where: { idSesion },
+        data: {
+          notasMedico,
+          fechaRevisionMedico: new Date()
+        }
+      });
+
+      return {
+        ok: true,
+        message: 'Notas del médico agregadas correctamente',
+        sesion: sesionActualizada
+      };
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error.message || 'Error al agregar notas del médico'
+      });
     }
   }
 
