@@ -20,7 +20,6 @@ export class DescripcionesImagenesController {
       throw new Error('No bufferBase64 in payload');
     }
 
-    //TODO: MANEJAR EL ID DE USUARIO DE MANERA ADECUADA, ESTO ES SOLO PRUEBAS
     const idUsuario = payload?.idUsuario;
 
     const buffer = Buffer.from(base64, 'base64');
@@ -55,6 +54,41 @@ export class DescripcionesImagenesController {
     }
 
     return this.descripcionesImagenesService.create(imagenPayload);
+  }
+
+
+  @MessagePattern({cmd:'uploadFotoPerfil'})
+  async subirFotoPerfil(@Payload() payload: any){
+    const base64 = payload?.bufferBase64;
+    if (!base64) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'No se recibió el archivo'});
+    }
+
+    const idUsuario = payload?.idUsuario;
+    if (!idUsuario) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'No se recibió el ID de usuario'});
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+
+    const file = {
+      fieldname: payload.fieldname || 'file',
+      originalname: payload.originalname || 'foto-perfil.jpg',
+      encoding: payload.encoding || '7bit',
+      mimetype: payload.mimetype || 'image/jpeg',
+      size: buffer.length,
+      buffer,
+    } as Express.Multer.File;
+
+    // Subir a Cloudinary
+    const imagen = await this.descripcionesImagenesService.uploadFile(file);
+
+    return {
+      urlImagen: imagen.secure_url,
+      idPublicImage: imagen.public_id,
+      formato: imagen.format,
+      mensaje: 'Foto de perfil subida exitosamente'
+    };
   }
 
   /* BUSCAR IMAGEN */
