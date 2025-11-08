@@ -687,33 +687,33 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   }
 
   /* BUSCAR SESIÓN POR ID DE PACIENTE*/
-  async buscarSesionPaciente(id: string){
-    const usuario = await this.validaUsuarioId(id);
-    if ( !['paciente'].includes(usuario.rol)) {
-      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
-    }
-    const sesion = await this.sESION.findFirst({
-      where: {
-        idPaciente: id
-      },
-      include: {
-        IMAGEN: {
-          select: {
-            urlImagen: true,
-            fechaSubida: true,
-            DESCRIPCION: true
-          }
-        }
-      }
-    })
-    if(!sesion){
-      throw new RpcException({
-        status: HttpStatus.NOT_FOUND,
-        message: "No hay una sesión asociada a este paciente"
-      })
-    }
-    return sesion;
-  }
+  // async buscarSesionPaciente(id: string){
+  //   const usuario = await this.validaUsuarioId(id);
+  //   if ( !['paciente'].includes(usuario.rol)) {
+  //     throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+  //   }
+  //   const sesion = await this.sESION.findFirst({
+  //     where: {
+  //       idPaciente: id
+  //     },
+  //     include: {
+  //       IMAGEN: {
+  //         select: {
+  //           urlImagen: true,
+  //           fechaSubida: true,
+  //           DESCRIPCION: true
+  //         }
+  //       }
+  //     }
+  //   })
+  //   if(!sesion){
+  //     throw new RpcException({
+  //       status: HttpStatus.NOT_FOUND,
+  //       message: "No hay una sesión asociada a este paciente"
+  //     })
+  //   }
+  //   return sesion;
+  // }
 
 
   /*ACTUALIZAR SESIÓN*/
@@ -888,6 +888,49 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'La persona que describe una imagen debe ser un paciente'});
     }
 
+    //Validación idImagen y buscar la sesión asociada a esa imagen
+    const idImagen = crearDescripcionDto.idImagen;
+    const imagen = await this.buscarImagen(idImagen);
+
+    // Verificar que la imagen esté asociada a una sesión
+    if (!imagen.idSesion) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "La imagen no está asociada a ninguna sesión"
+      });
+    }
+
+    // Verificar que la imagen no haya sido descrita previamente
+    const descripcionExistente = await this.dESCRIPCION.findFirst({
+      where: { idImagen: idImagen }
+    });
+
+    if (descripcionExistente) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "Esta imagen ya ha sido descrita previamente"
+      });
+    }
+
+    // Buscar la sesión asociada a la imagen (no cualquier sesión del paciente)
+    const sesion = await this.buscarSesion(imagen.idSesion);
+    const idSesion = sesion.idSesion;
+
+    // Validar que el paciente que describe sea el mismo de la sesión
+    if (sesion.idPaciente !== idPaciente) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "La imagen pertenece a una sesión de otro paciente"
+      });
+    }
+
+    // Validamos estado sesion
+    if (sesion.estado == estado_sesion.completado){
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: "No es posible realizar descripciones en sesiones completadas"
+      })
+    }
 
     //Numero de sesionesPaciente
     const numeroSesiones = await this.sESION.count({
@@ -895,24 +938,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         idPaciente: idPaciente
       }
     })
-
-    //Validación idImagen
-    const idImagen = crearDescripcionDto.idImagen;
-    await this.buscarImagen(idImagen);
-
-
-
-    const sesion = await this.buscarSesionPaciente(idPaciente);
-    const idSesion = sesion.idSesion;
-
-
-      //Validamos estado  sesion
-    if (sesion.estado == estado_sesion.completado){
-      throw new RpcException({
-        status: HttpStatus.BAD_REQUEST,
-        message: "No es posible realizar descripciones en sesiones completadas"
-      })
-    }
 
     const descripcion = await this.dESCRIPCION.create({
     data: {
@@ -1293,13 +1318,10 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     - elementosComision: cada falso sustantivo (personas/objetos/acciones/lugares no existentes en el GroundTruth).
     - aciertos: solo elementos correctamente recordados; marca “incierto” únicamente en NO núcleo.
 
-    Conclusión empática (dirigida al paciente):
-    - Usa un tono cálido, amigable, positivo y motivador. 
-    - Menciona lo que hizo bien, lo que puede mejorar y algo de ánimo. 
+    Mensaje empático (dirigida al paciente):
+    - Usa un tono cálido, amigable, positivo y motivador.  
     - Evita tecnicismos, juicios clínicos o lenguaje negativo. 
-    - Tu salida puede ser más descriptiva, aquí tienes un ejemplo simple: 
-    “Recordaste muy bien a las personas en la foto. Se te escaparon algunos detalles como que ese día comieron perros calientes, pero tu historia fue clara. 
-    ¡Sigue practicando, puedes mejorar mucho!”
+    - Solamente debes darle ánimo al paciente para que siga con su proceso, no debes darle ninguna retroalimentación de los resultados obtenidos.
     `;
   }
 
@@ -1328,9 +1350,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       - Evita recomendaciones terapéuticas específicas; sugiere “seguimiento” o “monitoreo” si procede.
       - Extensión orientativa: 90–300 palabras.
 
-    2) ConclusionPaciente (dirigida al paciente):
+    2) ConclusionCuidador (dirigida al cuidador):
       - Tono cálido, positivo y motivador.
-      - Menciona lo que hizo bien, lo mejorable en palabras simples y ofrece ánimo.
+      - Menciona lo que el paciente hizo bien, lo mejorable en palabras simples y ofrece ánimo.
       - Evita tecnicismos, juicios o lenguaje negativo.
       - Mantén cercanía y respeto; evita la palabra “error”.
       - Extensión orientativa: 60–110 palabras.
