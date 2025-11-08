@@ -508,6 +508,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       where: {
         idPaciente: idPaciente
       },
+      orderBy: {
+        fechaCreacion: 'asc'  // Ordenar por fecha de creación ascendente para obtener la primera sesión (baseline)
+      },
       include: {
         IMAGEN: {
           select: {
@@ -734,6 +737,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         const sesiones = await this.sESION.findMany({
           where: { idPaciente: sesion.idPaciente },
           select: { idSesion: true },
+          orderBy: { fechaCreacion: 'asc' }  // Ordenar por fecha de creación para obtener número de sesión consistente
         });
 
         if (sesion.idPaciente == null) {
