@@ -4,14 +4,14 @@ steps:
   args:
     - -c
     - |
-       docker build -t us-east4-docker.pkg.dev/douremember-477701/douremember-registry/alertas-reportes-ms -f dockerfile.prod --platform=linux/amd64 --build-arg DATABASE_URL=$$DATABASE_URL .
+       docker build -t us-east4-docker.pkg.dev/douremember-477701/douremember-registry/descripciones-imagenes-ms -f dockerfile.prod --platform=linux/amd64 --build-arg DATABASE_URL=$$DATABASE_URL .
   secretEnv: ['DATABASE_URL']
 
 - name: 'gcr.io/cloud-builders/docker'
   args:
     [
       'push',
-      'us-east4-docker.pkg.dev/douremember-477701/douremember-registry/alertas-reportes-ms',
+      'us-east4-docker.pkg.dev/douremember-477701/douremember-registry/descripciones-imagenes-ms',
     ]
 
 availableSecrets:
