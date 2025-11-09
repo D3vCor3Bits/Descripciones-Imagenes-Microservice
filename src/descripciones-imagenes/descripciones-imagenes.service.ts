@@ -514,6 +514,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       include: {
         IMAGEN: {
           select: {
+            idImagen: true,
+            idCuidador:true,
             urlImagen: true,
             fechaSubida: true,
             DESCRIPCION: {
@@ -524,6 +526,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
             },
             GROUNDTRUTH: {
               select:{
+                idGroundtruth: true,
                 texto: true,
                 fecha: true,
                 palabrasClave: true,
@@ -566,6 +569,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         include: {
           IMAGEN: {
             select: {
+              idImagen: true,
+              idCuidador: true,
               urlImagen: true,
               fechaSubida: true,
               DESCRIPCION: {
@@ -614,6 +619,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         include: {
           IMAGEN: {
             select: {
+              idImagen: true,
+              idCuidador: true,
               urlImagen: true,
               fechaSubida: true,
               DESCRIPCION: {
@@ -624,6 +631,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
               },
               GROUNDTRUTH: {
                 select:{
+                  idGroundtruth: true,
                   texto: true,
                   fecha: true,
                   palabrasClave: true,
@@ -673,6 +681,8 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       include: {
         IMAGEN: {
           select: {
+            idImagen: true,
+            idCuidador: true,
             urlImagen: true,
             fechaSubida: true,
             DESCRIPCION: true
@@ -1322,10 +1332,11 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     - elementosComision: cada falso sustantivo (personas/objetos/acciones/lugares no existentes en el GroundTruth).
     - aciertos: solo elementos correctamente recordados; marca “incierto” únicamente en NO núcleo.
 
-    Mensaje empático (dirigida al paciente):
+    Mensaje empático (dirigido al paciente):
     - Usa un tono cálido, amigable, positivo y motivador.  
     - Evita tecnicismos, juicios clínicos o lenguaje negativo. 
-    - Solamente debes darle ánimo al paciente para que siga con su proceso, no debes darle ninguna retroalimentación de los resultados obtenidos.
+    - Debes darle ánimo al paciente para que siga con su proceso, no debes brindar ninguna retroalimentación de los resultados obtenidos.
+    - Recordarle al paciente que es importante la constancia. En un tono agradable y amistoso.
     `;
   }
 
