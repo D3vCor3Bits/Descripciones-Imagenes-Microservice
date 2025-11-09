@@ -172,6 +172,29 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   async eliminarImagen(id: number) {
     const imagen = await this.buscarImagen(id);
 
+    // Si la imagen está asociada a una sesión, validar el estado de la sesión
+    const sesionIdImagenActual = imagen.idSesion;
+    if (sesionIdImagenActual != null) {
+      const sesion = await this.buscarSesion(sesionIdImagenActual);
+      if (sesion.estado == estado_sesion.completado) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: "No es posible eliminar la imagen si la sesión en la que está ya fue completada"
+        });
+      }
+    }
+
+    // Si ya existe una descripción asociada a la imagen, impedir la eliminación
+    const descripcionExistente = await this.dESCRIPCION.findFirst({
+      where: { idImagen: id }
+    });
+    if (descripcionExistente) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: 'No es posible eliminar la imagen: ya existe una descripción asociada'
+      });
+    }
+
     const fechaSubida = imagen.fechaSubida;
 
     const result = calcularDiferenciaHoraria(fechaSubida);
