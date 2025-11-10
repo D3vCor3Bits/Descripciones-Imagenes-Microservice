@@ -211,6 +211,18 @@ export class DescripcionesImagenesController {
     return this.descripcionesImagenesService.agregarNotasMedico(payload.idSesion, payload.notasMedico);
   }
 
+  /* LISTAR SESIONES CREADAS POR UN CUIDADOR */
+  @MessagePattern({cmd:'listarSesionesCuidador'})
+  listarSesionesCuidador(@Payload() payload: { idCuidador: string } & SesionPaginationDto){
+    return this.descripcionesImagenesService.listarSesionesCuidador(payload.idCuidador, payload);
+  }
+
+  /* LISTAR SESIONES DE UN PACIENTE CREADAS POR UN CUIDADOR */
+  @MessagePattern({cmd:'listarSesionesPacientePorCuidador'})
+  listarSesionesPacientePorCuidador(@Payload() payload: { idPaciente: string, idCuidador: string } & SesionPaginationDto){
+    return this.descripcionesImagenesService.listarSesionesPacientePorCuidador(payload.idPaciente, payload.idCuidador, payload);
+  }
+
   /*-------------------------------------------------------------------------*/
   /*---------------------------------DESCRIPCIÓN--------------------------------*/
   /*-------------------------------------------------------------------------*/

@@ -16,6 +16,7 @@ describe('DescripcionesImagenesService', () => {
       findMany: jest.fn(),
       delete: jest.fn(),
       count: jest.fn(),
+      update: jest.fn(),
     },
     gROUNDTRUTH: {
       create: jest.fn(),
@@ -29,6 +30,7 @@ describe('DescripcionesImagenesService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
+      groupBy: jest.fn(),
     },
     dESCRIPCION: {
       create: jest.fn(),
@@ -38,6 +40,10 @@ describe('DescripcionesImagenesService', () => {
     },
     pUNTAJE: {
       create: jest.fn(),
+      findMany: jest.fn(),
+    },
+    vW_PromediosPorSesion: {
+      findFirst: jest.fn(),
     },
   };
 
@@ -96,6 +102,7 @@ describe('DescripcionesImagenesService', () => {
       expect(resultado).toEqual(mockImagen);
       expect(mockPrismaClient.iMAGEN.findFirst).toHaveBeenCalledWith({
         where: { idImagen: 1 },
+        include: { GROUNDTRUTH: true },
       });
       expect(mockPrismaClient.iMAGEN.findFirst).toHaveBeenCalledTimes(1);
     });
@@ -306,15 +313,17 @@ describe('DescripcionesImagenesService', () => {
       // Arrange
       const crearSesionDto = {
         idCuidador: 'uuid-cuidador',
-        fechaInicio: new Date(),
-        imagenesIds: [],
+        fechaInicioPropuesta: new Date(),
+        imagenesIds: [1, 2, 3],
       };
 
       const mockSesion = {
         idSesion: 1,
         idPaciente: 'uuid-paciente',
+        idCuidador: 'uuid-cuidador',
         fechaCreacion: expect.any(Date),
-        estado: 'en_progreso',
+        fechaInicioPropuesta: expect.any(Date),
+        estado: 'pendiente',
         sessionRecall: 0,
         sessionComision: 0,
         sessionOmision: 0,
@@ -323,6 +332,17 @@ describe('DescripcionesImagenesService', () => {
         sessionTotal: 0,
         conclusionTecnica: "No se ha proporcionado todavía",
         conclusionNormal: "No se ha proporcionado todavía",
+        activacion: false,
+        notasMedico: "No hay notas aún",
+        fechaRevisionMedico: null,
+      };
+
+      const mockImagen = {
+        idImagen: 1,
+        idCuidador: 'uuid-cuidador',
+        idSesion: null,
+        urlImagen: 'https://example.com/image.jpg',
+        GROUNDTRUTH: null,
       };
 
       // Mock para validaUsuarioId
@@ -333,14 +353,100 @@ describe('DescripcionesImagenesService', () => {
       // Mock para pacienteCuidador
       mockNatsClient.send.mockReturnValueOnce(of([{ idPaciente: 'uuid-paciente' }]));
 
+      // Mock para buscarImagen (validación de imágenes) - se llama para cada imagen
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(mockImagen);
+
+      // Mock para crear sesión
       mockPrismaClient.sESION.create.mockResolvedValue(mockSesion);
+
+      // Mock para actualizar imágenes (se llama internamente en actualizarImagen)
+      mockPrismaClient.iMAGEN.update.mockResolvedValue({ ...mockImagen, idSesion: 1 });
+
+      // Mock de buscarSesion (llamado dentro de actualizarImagen)
+      mockPrismaClient.sESION.findFirst.mockResolvedValue({
+        idSesion: 1,
+        estado: 'pendiente',
+        IMAGEN: [],
+      });
+
+      // Mock de count para actualizarImagen
+      mockPrismaClient.iMAGEN.count.mockResolvedValue(0);
 
       // Act
       const resultado = await service.crearSesion(crearSesionDto as any);
 
       // Assert
       expect(resultado).toEqual(mockSesion);
-      expect(mockPrismaClient.sESION.create).toHaveBeenCalled();
+      expect(mockPrismaClient.sESION.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          idCuidador: 'uuid-cuidador',
+          idPaciente: 'uuid-paciente',
+          sessionRecall: 0,
+          sessionComision: 0,
+          activacion: false,
+          notasMedico: "No hay notas aún",
+        })
+      });
+    });
+
+    it('debe lanzar excepción si el usuario no es cuidador o administrador', async () => {
+      // Arrange
+      const crearSesionDto = {
+        idCuidador: 'uuid-paciente',
+        imagenesIds: [],
+      };
+
+      // Mock para validaUsuarioId - retorna un paciente
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: 'uuid-paciente' }] 
+      }));
+
+      // Act & Assert
+      await expect(service.crearSesion(crearSesionDto as any))
+        .rejects
+        .toThrow(RpcException);
+    });
+
+    it('debe lanzar excepción si no hay paciente asociado al cuidador', async () => {
+      // Arrange
+      const crearSesionDto = {
+        idCuidador: 'uuid-cuidador',
+        imagenesIds: [],
+      };
+
+      // Mock para validaUsuarioId
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: 'uuid-cuidador' }] 
+      }));
+      
+      // Mock para pacienteCuidador - array vacío
+      mockNatsClient.send.mockReturnValueOnce(of([]));
+
+      // Act & Assert
+      await expect(service.crearSesion(crearSesionDto as any))
+        .rejects
+        .toThrow(RpcException);
+    });
+
+    it('debe lanzar excepción si se intentan asociar más de 3 imágenes', async () => {
+      // Arrange
+      const crearSesionDto = {
+        idCuidador: 'uuid-cuidador',
+        imagenesIds: [1, 2, 3, 4],
+      };
+
+      // Mock para validaUsuarioId
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: 'uuid-cuidador' }] 
+      }));
+      
+      // Mock para pacienteCuidador
+      mockNatsClient.send.mockReturnValueOnce(of([{ idPaciente: 'uuid-paciente' }]));
+
+      // Act & Assert
+      await expect(service.crearSesion(crearSesionDto as any))
+        .rejects
+        .toThrow(RpcException);
     });
   });
 
@@ -451,6 +557,269 @@ describe('DescripcionesImagenesService', () => {
       expect(resultado.data).toEqual(mockDescripciones);
       expect(resultado.meta.total).toBe(5);
       expect(mockPrismaClient.sESION.findFirst).toHaveBeenCalled();
+    });
+  });
+
+  /*-------------------------------------------------------------------------*/
+  /*-------------------------NUEVAS FUNCIONES DE SESIONES--------------------*/
+  /*-------------------------------------------------------------------------*/
+
+  describe('listarSesionesCuidador', () => {
+    it('debe listar todas las sesiones creadas por un cuidador', async () => {
+      // Arrange
+      const idCuidador = 'uuid-cuidador';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+        estado_sesion: undefined,
+      };
+
+      const mockUsuario = {
+        rol: 'cuidador',
+        idUsuario: 'uuid-cuidador',
+      };
+
+      const mockSesiones = [
+        {
+          idSesion: 1,
+          idCuidador: 'uuid-cuidador',
+          idPaciente: 'uuid-paciente-1',
+          estado: 'pendiente',
+          fechaCreacion: new Date(),
+        },
+        {
+          idSesion: 2,
+          idCuidador: 'uuid-cuidador',
+          idPaciente: 'uuid-paciente-2',
+          estado: 'en_curso',
+          fechaCreacion: new Date(),
+        },
+      ];
+
+      // Mock validación de usuario
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [mockUsuario] 
+      }));
+
+      // Mock count y findMany
+      mockPrismaClient.sESION.count.mockResolvedValue(2);
+      mockPrismaClient.sESION.findMany.mockResolvedValue(mockSesiones);
+
+      // Act
+      const resultado = await service.listarSesionesCuidador(idCuidador, sesionPaginationDto as any);
+
+      // Assert
+      expect(resultado).toHaveProperty('data');
+      expect(resultado).toHaveProperty('meta');
+      expect(resultado.data).toEqual(mockSesiones);
+      expect(resultado.meta.total).toBe(2);
+      expect(mockPrismaClient.sESION.count).toHaveBeenCalledWith({
+        where: {
+          idCuidador: 'uuid-cuidador',
+        }
+      });
+    });
+
+    it('debe filtrar por estado_sesion cuando se proporciona', async () => {
+      // Arrange
+      const idCuidador = 'uuid-cuidador';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+        estado_sesion: 'completado',
+      };
+
+      const mockUsuario = {
+        rol: 'cuidador',
+        idUsuario: 'uuid-cuidador',
+      };
+
+      // Mock validación de usuario
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [mockUsuario] 
+      }));
+
+      mockPrismaClient.sESION.count.mockResolvedValue(1);
+      mockPrismaClient.sESION.findMany.mockResolvedValue([]);
+
+      // Act
+      await service.listarSesionesCuidador(idCuidador, sesionPaginationDto as any);
+
+      // Assert
+      expect(mockPrismaClient.sESION.count).toHaveBeenCalledWith({
+        where: {
+          idCuidador: 'uuid-cuidador',
+          estado: 'completado',
+        }
+      });
+    });
+
+    it('debe lanzar excepción si el usuario no es cuidador o administrador', async () => {
+      // Arrange
+      const idCuidador = 'uuid-paciente';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+      };
+
+      // Mock validación de usuario - retorna paciente
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: 'uuid-paciente' }] 
+      }));
+
+      // Act & Assert
+      await expect(service.listarSesionesCuidador(idCuidador, sesionPaginationDto as any))
+        .rejects
+        .toThrow(RpcException);
+    });
+  });
+
+  describe('listarSesionesPacientePorCuidador', () => {
+    it('debe listar sesiones de un paciente creadas por un cuidador específico', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      const idCuidador = 'uuid-cuidador';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+        estado_sesion: undefined,
+      };
+
+      const mockPaciente = {
+        rol: 'paciente',
+        idUsuario: 'uuid-paciente',
+      };
+
+      const mockCuidador = {
+        rol: 'cuidador',
+        idUsuario: 'uuid-cuidador',
+      };
+
+      const mockSesiones = [
+        {
+          idSesion: 1,
+          idCuidador: 'uuid-cuidador',
+          idPaciente: 'uuid-paciente',
+          estado: 'pendiente',
+          fechaCreacion: new Date(),
+        },
+      ];
+
+      // Mock validación de paciente
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [mockPaciente] 
+      }));
+
+      // Mock validación de cuidador
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [mockCuidador] 
+      }));
+
+      // Mock count y findMany
+      mockPrismaClient.sESION.count.mockResolvedValue(1);
+      mockPrismaClient.sESION.findMany.mockResolvedValue(mockSesiones);
+
+      // Act
+      const resultado = await service.listarSesionesPacientePorCuidador(
+        idPaciente, 
+        idCuidador, 
+        sesionPaginationDto as any
+      );
+
+      // Assert
+      expect(resultado).toHaveProperty('data');
+      expect(resultado).toHaveProperty('meta');
+      expect(resultado.data).toEqual(mockSesiones);
+      expect(resultado.meta.total).toBe(1);
+      expect(mockPrismaClient.sESION.count).toHaveBeenCalledWith({
+        where: {
+          idPaciente: 'uuid-paciente',
+          idCuidador: 'uuid-cuidador',
+        }
+      });
+    });
+
+    it('debe filtrar por estado_sesion cuando se proporciona', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      const idCuidador = 'uuid-cuidador';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+        estado_sesion: 'completado',
+      };
+
+      // Mock validaciones
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: 'uuid-paciente' }] 
+      }));
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: 'uuid-cuidador' }] 
+      }));
+
+      mockPrismaClient.sESION.count.mockResolvedValue(0);
+      mockPrismaClient.sESION.findMany.mockResolvedValue([]);
+
+      // Act
+      await service.listarSesionesPacientePorCuidador(
+        idPaciente, 
+        idCuidador, 
+        sesionPaginationDto as any
+      );
+
+      // Assert
+      expect(mockPrismaClient.sESION.count).toHaveBeenCalledWith({
+        where: {
+          idPaciente: 'uuid-paciente',
+          idCuidador: 'uuid-cuidador',
+          estado: 'completado',
+        }
+      });
+    });
+
+    it('debe lanzar excepción si idPaciente no es de un paciente', async () => {
+      // Arrange
+      const idPaciente = 'uuid-cuidador';
+      const idCuidador = 'uuid-cuidador';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+      };
+
+      // Mock validación - retorna cuidador en lugar de paciente
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: 'uuid-cuidador' }] 
+      }));
+
+      // Act & Assert
+      await expect(
+        service.listarSesionesPacientePorCuidador(idPaciente, idCuidador, sesionPaginationDto as any)
+      ).rejects.toThrow(RpcException);
+    });
+
+    it('debe lanzar excepción si idCuidador no es de un cuidador o administrador', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      const idCuidador = 'uuid-otro-paciente';
+      const sesionPaginationDto = {
+        page: 1,
+        limit: 10,
+      };
+
+      // Mock validación de paciente - OK
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: 'uuid-paciente' }] 
+      }));
+
+      // Mock validación de cuidador - retorna paciente
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: 'uuid-otro-paciente' }] 
+      }));
+
+      // Act & Assert
+      await expect(
+        service.listarSesionesPacientePorCuidador(idPaciente, idCuidador, sesionPaginationDto as any)
+      ).rejects.toThrow(RpcException);
     });
   });
 });

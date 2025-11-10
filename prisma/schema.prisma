@@ -78,6 +78,7 @@ model SESION {
   activacion           Boolean?      @default(false)
   notasMedico          String?
   fechaRevisionMedico  DateTime?     @db.Timestamptz(6)
+  idCuidador           String?       @db.Uuid
   IMAGEN               IMAGEN[]
 }
 

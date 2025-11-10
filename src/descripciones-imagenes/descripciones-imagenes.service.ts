@@ -156,6 +156,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     const imagen = await this.iMAGEN.findFirst({
       where: {
         idImagen: id
+      },
+      include:{
+        GROUNDTRUTH:true
       }
     })  
     
@@ -469,6 +472,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       const sesion = await this.sESION.create({
         data:{
           idPaciente: pacienteCuidador[0].idPaciente,
+          idCuidador: idCuidador,
           fechaCreacion: this.parseDate((crearSesionDto as any).fechaCreacion) ?? new Date(),
           ...((this.parseDate((crearSesionDto as any).fechaInicioPropuesta)) ? { fechaInicioPropuesta: this.parseDate((crearSesionDto as any).fechaInicioPropuesta) } : {}),
           sessionCoherencia: 0,
@@ -602,9 +606,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
                   fecha: true
                 }
               }
+            }
           }
         }
-      }
       }),
       meta: {
         total: totalPages,
@@ -661,9 +665,9 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
                   preguntasGuiaPaciente: true
                 }
               }
+            }
           }
         }
-      }
       }),
       meta: {
         total: totalPages,
@@ -694,6 +698,140 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     }
   }
 
+  /* LISTAR TODAS LAS SESIONES CREADAS POR UN CUIDADOR */
+  async listarSesionesCuidador(idCuidador: string, sesionPaginationDto: SesionPaginationDto){
+    // Validar que sea un cuidador
+    const usuario = await this.validaUsuarioId(idCuidador);
+    if (!['cuidador', 'administrador'].includes(usuario.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un cuidador o administrador'});
+    }
+
+    const totalPages = await this.sESION.count({
+      where: {
+        idCuidador: idCuidador,
+        ...(sesionPaginationDto.estado_sesion && { estado: sesionPaginationDto.estado_sesion })
+      }
+    })
+
+    const currentPage = Number(sesionPaginationDto.page);
+    const perPage = Number(sesionPaginationDto.limit);
+
+    return {
+      data: await this.sESION.findMany({
+        skip: (currentPage-1)*perPage,
+        take: perPage,
+        where: {
+          idCuidador: idCuidador,
+          ...(sesionPaginationDto.estado_sesion && { estado: sesionPaginationDto.estado_sesion })
+        },
+        include: {
+          IMAGEN: {
+            select: {
+              idImagen: true,
+              urlImagen: true,
+              fechaSubida: true,
+              idCuidador: true,
+              DESCRIPCION: {
+                select:{
+                  texto: true,
+                  fecha: true
+                }
+              },
+              GROUNDTRUTH: {
+                select:{
+                  idGroundtruth: true,
+                  texto: true,
+                  fecha: true,
+                  palabrasClave: true,
+                  preguntasGuiaPaciente: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          fechaCreacion: 'desc'
+        }
+      }),
+      meta: {
+        total: totalPages,
+        page: currentPage,
+        lastPage: Math.ceil(totalPages/perPage)
+      }
+    }
+  }
+
+  /* LISTAR SESIONES DE UN PACIENTE CREADAS POR UN CUIDADOR ESPECÍFICO */
+  async listarSesionesPacientePorCuidador(idPaciente: string, idCuidador: string, sesionPaginationDto: SesionPaginationDto){
+    // Validar id paciente
+    const paciente = await this.validaUsuarioId(idPaciente);
+    if (!['paciente'].includes(paciente.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El id debe ser de un paciente'});
+    }
+
+    // Validar id cuidador
+    const cuidador = await this.validaUsuarioId(idCuidador);
+    if (!['cuidador', 'administrador'].includes(cuidador.rol)) {
+      throw new RpcException({status: HttpStatus.BAD_REQUEST, message: 'El idCuidador debe ser de un cuidador o administrador'});
+    }
+
+    const totalPages = await this.sESION.count({
+      where: {
+        idPaciente: idPaciente,
+        idCuidador: idCuidador,
+        ...(sesionPaginationDto.estado_sesion && { estado: sesionPaginationDto.estado_sesion })
+      }
+    })
+
+    const currentPage = Number(sesionPaginationDto.page);
+    const perPage = Number(sesionPaginationDto.limit);
+
+    return {
+      data: await this.sESION.findMany({
+        skip: (currentPage-1)*perPage,
+        take: perPage,
+        where: {
+          idPaciente: idPaciente,
+          idCuidador: idCuidador,
+          ...(sesionPaginationDto.estado_sesion && { estado: sesionPaginationDto.estado_sesion })
+        },
+        include: {
+          IMAGEN: {
+            select: {
+              idImagen: true,
+              urlImagen: true,
+              fechaSubida: true,
+              idCuidador: true,
+              DESCRIPCION: {
+                select:{
+                  texto: true,
+                  fecha: true
+                }
+              },
+              GROUNDTRUTH: {
+                select:{
+                  idGroundtruth: true,
+                  texto: true,
+                  fecha: true,
+                  palabrasClave: true,
+                  preguntasGuiaPaciente: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          fechaCreacion: 'desc'
+        }
+      }),
+      meta: {
+        total: totalPages,
+        page: currentPage,
+        lastPage: Math.ceil(totalPages/perPage)
+      }
+    }
+  }
+
 
   /* BUSCAR SESIÓN POR ID*/
   async buscarSesion(id: number){
@@ -708,7 +846,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
             idCuidador: true,
             urlImagen: true,
             fechaSubida: true,
-            DESCRIPCION: true
+            DESCRIPCION: true,
           }
         }
       }
@@ -755,7 +893,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
   /*ACTUALIZAR SESIÓN*/
   async actualizarSesion(id: number, actualizarSesionDto: ActualizarSesionDto){
       if(actualizarSesionDto.activacion == true || actualizarSesionDto.activacion == false || actualizarSesionDto.estado || actualizarSesionDto.fechaInicioPropuesta || actualizarSesionDto.notasMedico || actualizarSesionDto.fechaRevisionMedico){
-      const {id:__, ...data} = actualizarSesionDto;
+      const {id:__, idCuidador, ...data} = actualizarSesionDto;
 
       const sesion = await this.buscarSesion(id);
       if(sesion.estado == estado_sesion.completado){
@@ -763,6 +901,29 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           status: HttpStatus.BAD_REQUEST,
           message: "No es posible actualizar una sesión completada"
         })
+      }
+
+      // Validación de seguridad: Solo el cuidador que creó la sesión o un administrador puede actualizarla
+      if (idCuidador) {
+        const usuario = await this.validaUsuarioId(idCuidador);
+        
+        // Si es administrador, puede actualizar cualquier sesión
+        if (usuario.rol === 'administrador') {
+          // Permitir actualización
+        } else if (usuario.rol === 'cuidador') {
+          // Si es cuidador, solo puede actualizar sus propias sesiones
+          if (sesion.idCuidador !== idCuidador) {
+            throw new RpcException({
+              status: HttpStatus.FORBIDDEN,
+              message: "Solo el cuidador que creó la sesión puede actualizarla"
+            })
+          }
+        } else {
+          throw new RpcException({
+            status: HttpStatus.FORBIDDEN,
+            message: "Solo cuidadores y administradores pueden actualizar sesiones"
+          })
+        }
       }
 
       
@@ -800,7 +961,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         data: data
       })
     }else{
-      console.log(actualizarSesionDto)
       throw new RpcException({
         status: HttpStatus.BAD_REQUEST,
         message: "Solo es posible actualizar los campos indicados"
@@ -1004,14 +1164,11 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       })
     }
 
-    console.log("ENTRANDO A COMPARATIVA")
     //Generamos la comparativa
     const resultadoComparativa = await this.comparacionDescripcionGroundTruth(descripcion.idDescripcion, descripcion.texto, groundTruthDelaImagen.texto, groundTruthDelaImagen.palabrasClave)
 
-    console.log("SALIMOS DE COMPARATIVA")
 
     if(resultadoComparativa.puntajeTotal < 0.45){
-      console.log("ENTRAMOS A MANDAR ALERTA")
       const medico = await this.medicoDePaciente(idPaciente);
       this.client.emit({cmd:'alertasEvaluarPuntaje'},{
         usuarioEmail: usuario.correo,
@@ -1022,8 +1179,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
         umbralMinimo: 0.45
       })
     }
-      console.log("SALIMOS DE MANDAR ALERTA")
-
 
 
     //Verificamos que la descripcion que se acabó de subir sea la 3, en ese caso...
@@ -1076,7 +1231,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
 
       //En caso de que la sesión sea el baseline...
       if(numeroSesiones == 1){
-      console.log("ENTRAMOS A MANDAR ALERTA DE BASELINE")
         const medico = await this.medicoDePaciente(idPaciente);
         this.client.emit({cmd:'generarAvisoBaseline'},{
           usuarioEmail: usuario.correo,
@@ -1090,7 +1244,6 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
           sessionTotal: sesionActualizar.sessionTotal 
         })
       }
-      console.log("SALIMOS DE MANDAR ALERTA DE BASELINE")
 
     }
     return {
