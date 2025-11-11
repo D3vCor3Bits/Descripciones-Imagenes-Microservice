@@ -1171,7 +1171,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
     if(resultadoComparativa.puntajeTotal < 0.45){
       const medico = await this.medicoDePaciente(idPaciente);
       this.client.emit({cmd:'alertasEvaluarPuntaje'},{
-        usuarioEmail: usuario.correo,
+        usuarioEmail: medico.correo,
         nombrePaciente: usuario.nombre,
         nombreDoctor: medico.nombre,
         puntaje: resultadoComparativa.puntajeTotal,
@@ -1233,7 +1233,7 @@ export class DescripcionesImagenesService extends PrismaClient implements OnModu
       if(numeroSesiones == 1){
         const medico = await this.medicoDePaciente(idPaciente);
         this.client.emit({cmd:'generarAvisoBaseline'},{
-          usuarioEmail: usuario.correo,
+          usuarioEmail: medico.correo,
           nombreDoctor: medico.nombre,
           nombrePaciente: usuario.nombre,
           sessionCoherencia: sesionActualizar.sessionCoherencia,
