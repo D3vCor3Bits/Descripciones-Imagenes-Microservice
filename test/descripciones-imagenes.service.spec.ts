@@ -229,6 +229,157 @@ describe('DescripcionesImagenesService', () => {
     });
   });
 
+  describe('eliminarImagen', () => {
+    it('debe eliminar una imagen correctamente dentro de las 24 horas', async () => {
+      // Arrange
+      const mockImagen = {
+        idImagen: 1,
+        urlImagen: 'https://test.com/image.jpg',
+        fechaSubida: new Date(), // Fecha actual (< 24 horas)
+        idCuidador: '123',
+      };
+
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(mockImagen);
+      mockPrismaClient.iMAGEN.delete.mockResolvedValue(mockImagen);
+
+      // Act
+      const resultado = await service.eliminarImagen(1);
+
+      // Assert
+      expect(resultado).toHaveProperty('message');
+      expect(resultado.message).toBe('Imagen eliminada correctamente');
+      expect(mockPrismaClient.iMAGEN.delete).toHaveBeenCalledWith({
+        where: { idImagen: 1 },
+      });
+    });
+
+    it('debe lanzar RpcException si han pasado más de 24 horas', async () => {
+      // Arrange
+      const fechaAntigua = new Date();
+      fechaAntigua.setDate(fechaAntigua.getDate() - 2); // 2 días atrás
+
+      const mockImagen = {
+        idImagen: 1,
+        urlImagen: 'https://test.com/image.jpg',
+        fechaSubida: fechaAntigua,
+        idCuidador: '123',
+      };
+
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(mockImagen);
+
+      // Act & Assert
+      await expect(service.eliminarImagen(1)).rejects.toThrow(RpcException);
+      
+      try {
+        await service.eliminarImagen(1);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.error.status).toBe(HttpStatus.FORBIDDEN);
+        expect(error.error.message).toContain('han pasado más de 24 horas');
+      }
+    });
+
+    it('debe lanzar RpcException si la imagen no existe', async () => {
+      // Arrange
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(service.eliminarImagen(999)).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('actualizarImagen', () => {
+    it('debe actualizar una imagen correctamente', async () => {
+      // Arrange
+      const idImagen = 1;
+      const actualizarImagenDto = {
+        idImagen: 1,
+        idSesion: 5,
+      };
+
+      const mockImagen = {
+        idImagen: 1,
+        urlImagen: 'https://test.com/image.jpg',
+        idCuidador: '123',
+        GROUNDTRUTH: null,
+      };
+
+      const mockSesion = {
+        idSesion: 5,
+        estado: 'pendiente',
+        IMAGEN: [],
+      };
+
+      const mockImagenActualizada = {
+        ...mockImagen,
+        idSesion: 5,
+      };
+
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(mockImagen);
+      mockPrismaClient.sESION.findFirst.mockResolvedValue(mockSesion); // Mock para buscarSesion
+      mockPrismaClient.iMAGEN.count.mockResolvedValue(0); // Mock para validar que no haya ya 3 imágenes
+      mockPrismaClient.iMAGEN.update.mockResolvedValue(mockImagenActualizada);
+
+      // Act
+      const resultado = await service.actualizarImagen(idImagen, actualizarImagenDto);
+
+      // Assert
+      expect(resultado).toEqual(mockImagenActualizada);
+      expect(mockPrismaClient.iMAGEN.update).toHaveBeenCalledWith({
+        where: { idImagen: 1 },
+        data: { idSesion: 5 },
+      });
+    });
+
+    it('debe lanzar RpcException si la imagen no existe', async () => {
+      // Arrange
+      const actualizarImagenDto = {
+        idImagen: 999,
+        idSesion: 5,
+      };
+
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.actualizarImagen(999, actualizarImagenDto)
+      ).rejects.toThrow(RpcException);
+    });
+
+    it('debe lanzar RpcException si falla la actualización', async () => {
+      // Arrange
+      const actualizarImagenDto = {
+        idImagen: 1,
+        idSesion: 5,
+      };
+
+      const mockImagen = {
+        idImagen: 1,
+        urlImagen: 'https://test.com/image.jpg',
+        idCuidador: '123',
+        GROUNDTRUTH: null,
+      };
+
+      const mockSesion = {
+        idSesion: 5,
+        estado: 'pendiente',
+        IMAGEN: [],
+      };
+
+      mockPrismaClient.iMAGEN.findFirst.mockResolvedValue(mockImagen);
+      mockPrismaClient.sESION.findFirst.mockResolvedValue(mockSesion);
+      mockPrismaClient.iMAGEN.count.mockResolvedValue(0);
+      mockPrismaClient.iMAGEN.update.mockRejectedValue(
+        new Error('Error de base de datos')
+      );
+
+      // Act & Assert
+      await expect(
+        service.actualizarImagen(1, actualizarImagenDto)
+      ).rejects.toThrow(Error);
+    });
+  });
+
   /*-------------------------------------------------------------------------*/
   /*------------------------------GROUNDTRUTH--------------------------------*/
   /*-------------------------------------------------------------------------*/
@@ -301,6 +452,152 @@ describe('DescripcionesImagenesService', () => {
 
       // Act & Assert
       await expect(service.buscarGroundTruth(999)).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('buscarGroundTruthIdImagen', () => {
+    it('debe retornar un ground truth cuando existe para una imagen', async () => {
+      // Arrange
+      const mockGroundTruth = {
+        idGroundtruth: 1,
+        texto: 'Texto verdadero',
+        palabrasClave: ['test'],
+        idImagen: 10,
+        fecha: new Date(),
+      };
+
+      mockPrismaClient.gROUNDTRUTH.findFirst.mockResolvedValue(mockGroundTruth);
+
+      // Act
+      const resultado = await service.buscarGroundTruthIdImagen(10);
+
+      // Assert
+      expect(resultado).toEqual(mockGroundTruth);
+      expect(mockPrismaClient.gROUNDTRUTH.findFirst).toHaveBeenCalledWith({
+        where: { idImagen: 10 },
+      });
+    });
+
+    it('debe lanzar RpcException cuando no existe GT para la imagen', async () => {
+      // Arrange
+      mockPrismaClient.gROUNDTRUTH.findFirst.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(service.buscarGroundTruthIdImagen(999)).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('actualizarGroundTruth', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('debe actualizar un ground truth correctamente dentro de las 24 horas', async () => {
+      // Arrange
+      const idGt = 1;
+      const actualizarGtDto = {
+        id: 1,
+        texto: 'Texto actualizado',
+        palabrasClave: ['nueva', 'palabra'],
+      };
+
+      const mockGroundTruth = {
+        idGroundtruth: 1,
+        texto: 'Texto original',
+        idImagen: 5,
+        fecha: new Date(), // Menos de 24 horas
+      };
+
+      const mockGroundTruthActualizado = {
+        ...mockGroundTruth,
+        texto: 'Texto actualizado',
+        palabrasClave: ['nueva', 'palabra'],
+      };
+
+      mockPrismaClient.gROUNDTRUTH.findFirst
+        .mockResolvedValueOnce(mockGroundTruth) // buscarGroundTruth
+        .mockResolvedValueOnce(mockGroundTruth); // segunda llamada interna
+      mockPrismaClient.dESCRIPCION.findFirst.mockResolvedValue(null); // No hay descripción
+      mockPrismaClient.gROUNDTRUTH.update.mockResolvedValue(mockGroundTruthActualizado);
+
+      // Act
+      const resultado = await service.actualizarGroundTruth(idGt, actualizarGtDto);
+
+      // Assert
+      expect(resultado).toEqual(mockGroundTruthActualizado);
+      expect(mockPrismaClient.gROUNDTRUTH.update).toHaveBeenCalledWith({
+        where: { idGroundtruth: 1 },
+        data: { texto: 'Texto actualizado', palabrasClave: ['nueva', 'palabra'] },
+      });
+    });
+
+    it('debe lanzar RpcException si ya existe una descripción de la imagen', async () => {
+      // Arrange
+      const mockGroundTruth = {
+        idGroundtruth: 1,
+        texto: 'Texto original',
+        idImagen: 5,
+        fecha: new Date(),
+      };
+
+      const mockDescripcion = {
+        idDescripcion: 1,
+        idImagen: 5,
+        texto: 'Descripción del paciente',
+      };
+
+      mockPrismaClient.gROUNDTRUTH.findFirst.mockResolvedValue(mockGroundTruth);
+      mockPrismaClient.dESCRIPCION.findFirst.mockResolvedValue(mockDescripcion);
+
+      // Act & Assert
+      await expect(
+        service.actualizarGroundTruth(1, { id: 1, texto: 'Nuevo' })
+      ).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('eliminarGroundTruth', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('debe lanzar RpcException si han pasado más de 24 horas', async () => {
+      // Arrange
+      const fechaAntigua = new Date();
+      fechaAntigua.setDate(fechaAntigua.getDate() - 3);
+
+      const mockGroundTruth = {
+        idGroundtruth: 1,
+        texto: 'Texto',
+        idImagen: 5,
+        fecha: fechaAntigua,
+      };
+
+      mockPrismaClient.gROUNDTRUTH.findFirst.mockResolvedValue(mockGroundTruth);
+
+      // Act & Assert
+      await expect(service.eliminarGroundTruth(1)).rejects.toThrow(RpcException);
+    });
+
+    it('debe lanzar RpcException si ya existe una descripción', async () => {
+      // Arrange
+      const mockGroundTruth = {
+        idGroundtruth: 1,
+        texto: 'Texto',
+        idImagen: 5,
+        fecha: new Date(),
+      };
+
+      const mockDescripcion = {
+        idDescripcion: 1,
+        idImagen: 5,
+      };
+
+      mockPrismaClient.gROUNDTRUTH.findFirst.mockResolvedValue(mockGroundTruth);
+      mockPrismaClient.dESCRIPCION.findFirst.mockResolvedValue(mockDescripcion);
+
+      // Act & Assert
+      await expect(service.eliminarGroundTruth(1)).rejects.toThrow(RpcException);
     });
   });
 
@@ -476,6 +773,312 @@ describe('DescripcionesImagenesService', () => {
 
       // Act & Assert
       await expect(service.buscarSesion(999)).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('actualizarSesion', () => {
+    it('debe actualizar una sesión correctamente', async () => {
+      // Arrange
+      const idSesion = 1;
+      const actualizarSesionDto = {
+        id: 1,
+        estado: 'completado' as any,
+        sessionTotal: 0.85,
+        conclusionTecnica: 'Conclusión técnica actualizada',
+      };
+
+      const mockSesion = {
+        idSesion: 1,
+        estado: 'en_curso',
+        IMAGEN: [],
+      };
+
+      const mockSesionActualizada = {
+        ...mockSesion,
+        estado: 'completado',
+        sessionTotal: 0.85,
+        conclusionTecnica: 'Conclusión técnica actualizada',
+      };
+
+      mockPrismaClient.sESION.findFirst.mockResolvedValue(mockSesion);
+      mockPrismaClient.sESION.update.mockResolvedValue(mockSesionActualizada);
+
+      // Act
+      const resultado = await service.actualizarSesion(idSesion, actualizarSesionDto);
+
+      // Assert
+      expect(resultado).toEqual(mockSesionActualizada);
+      expect(mockPrismaClient.sESION.update).toHaveBeenCalledWith({
+        where: { idSesion: 1 },
+        data: {
+          estado: 'completado',
+          sessionTotal: 0.85,
+          conclusionTecnica: 'Conclusión técnica actualizada',
+        },
+      });
+    });
+
+    it('debe lanzar RpcException si la sesión no existe', async () => {
+      // Arrange
+      mockPrismaClient.sESION.findFirst.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.actualizarSesion(999, { id: 999, estado: 'completado' as any })
+      ).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('cantidadSesionesPaciente', () => {
+    it('debe retornar la cantidad de sesiones de un paciente', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: idPaciente }] 
+      }));
+
+      mockPrismaClient.sESION.count.mockResolvedValue(5);
+
+      // Act
+      const resultado = await service.cantidadSesionesPaciente(idPaciente);
+
+      // Assert
+      expect(resultado).toHaveProperty('cantidad');
+      expect(resultado.cantidad).toBe(5);
+      expect(mockPrismaClient.sESION.count).toHaveBeenCalledWith({
+        where: { idPaciente },
+      });
+    });
+
+    it('debe lanzar RpcException si el usuario no es un paciente', async () => {
+      // Arrange
+      const idCuidador = 'uuid-cuidador';
+      
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: idCuidador }] 
+      }));
+
+      // Act & Assert
+      await expect(service.cantidadSesionesPaciente(idCuidador)).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('baseline', () => {
+    it('debe retornar el baseline (primera sesión) de un paciente', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      
+      const mockBaseline = {
+        idSesion: 1,
+        idPaciente,
+        estado: 'completado',
+        IMAGEN: [
+          {
+            urlImagen: 'https://test.com/image1.jpg',
+            fechaSubida: new Date(),
+            DESCRIPCION: {
+              texto: 'Primera descripción',
+              fecha: new Date(),
+            },
+            GROUNDTRUTH: {
+              texto: 'Ground truth 1',
+              fecha: new Date(),
+              palabrasClave: ['palabra1'],
+              preguntasGuiaPaciente: ['¿Qué ves?'],
+            },
+          },
+        ],
+      };
+
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: idPaciente }] 
+      }));
+
+      mockPrismaClient.sESION.findFirst.mockResolvedValue(mockBaseline);
+
+      // Act
+      const resultado = await service.baseline(idPaciente);
+
+      // Assert
+      expect(resultado).toEqual(mockBaseline);
+      expect(mockPrismaClient.sESION.findFirst).toHaveBeenCalledWith({
+        where: { idPaciente },
+        orderBy: { fechaCreacion: 'asc' },
+        include: {
+          IMAGEN: {
+            select: {
+              idImagen: true,
+              idCuidador: true,
+              urlImagen: true,
+              fechaSubida: true,
+              DESCRIPCION: {
+                select: {
+                  texto: true,
+                  fecha: true,
+                },
+              },
+              GROUNDTRUTH: {
+                select: {
+                  idGroundtruth: true,
+                  texto: true,
+                  fecha: true,
+                  palabrasClave: true,
+                  preguntasGuiaPaciente: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    it('debe lanzar RpcException si el usuario no es un paciente', async () => {
+      // Arrange
+      const idMedico = 'uuid-medico';
+      
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'medico', idUsuario: idMedico }] 
+      }));
+
+      // Act & Assert
+      await expect(service.baseline(idMedico)).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('listarSesiones', () => {
+    it('debe retornar lista paginada de sesiones de un paciente', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      const sesionPaginationDto = {
+        idPaciente,
+        page: 1,
+        limit: 10,
+        estado_sesion: 'pendiente' as any,
+      };
+
+      const mockSesiones = [
+        {
+          idSesion: 1,
+          idPaciente,
+          estado: 'pendiente',
+          IMAGEN: [],
+        },
+      ];
+
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: idPaciente }] 
+      }));
+
+      mockPrismaClient.sESION.count.mockResolvedValue(3);
+      mockPrismaClient.sESION.findMany.mockResolvedValue(mockSesiones);
+
+      // Act
+      const resultado = await service.listarSesiones(idPaciente, sesionPaginationDto);
+
+      // Assert
+      expect(resultado).toHaveProperty('data');
+      expect(resultado).toHaveProperty('meta');
+      expect(resultado.data).toEqual(mockSesiones);
+      expect(resultado.meta.total).toBe(3);
+      expect(mockPrismaClient.sESION.count).toHaveBeenCalledWith({
+        where: {
+          estado: 'pendiente',
+          idPaciente,
+        },
+      });
+    });
+
+    it('debe lanzar RpcException si el usuario no es paciente', async () => {
+      // Arrange
+      const idCuidador = 'uuid-cuidador';
+      const sesionPaginationDto = {
+        idPaciente: idCuidador,
+        page: 1,
+        limit: 10,
+      };
+
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'cuidador', idUsuario: idCuidador }] 
+      }));
+
+      // Act & Assert
+      await expect(
+        service.listarSesiones(idCuidador, sesionPaginationDto as any)
+      ).rejects.toThrow(RpcException);
+    });
+  });
+
+  describe('listarSesionesConGt', () => {
+    it('debe retornar lista paginada de sesiones con ground truth', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+      const sesionPaginationDto = {
+        idPaciente,
+        page: 1,
+        limit: 10,
+        estado_sesion: 'completado' as any,
+      };
+
+      const mockSesiones = [
+        {
+          idSesion: 1,
+          idPaciente,
+          estado: 'completado',
+          IMAGEN: [
+            {
+              urlImagen: 'https://test.com/img1.jpg',
+              DESCRIPCION: { texto: 'Desc 1' },
+              GROUNDTRUTH: { texto: 'GT 1', palabrasClave: ['test'] },
+            },
+          ],
+        },
+      ];
+
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: idPaciente }] 
+      }));
+
+      mockPrismaClient.sESION.count.mockResolvedValue(1);
+      mockPrismaClient.sESION.findMany.mockResolvedValue(mockSesiones);
+
+      // Act
+      const resultado = await service.listarSesionesConGt(idPaciente, sesionPaginationDto);
+
+      // Assert
+      expect(resultado).toHaveProperty('data');
+      expect(resultado.data).toEqual(mockSesiones);
+      expect(resultado.data[0].IMAGEN[0]).toHaveProperty('GROUNDTRUTH');
+    });
+  });
+
+  describe('listarSesionesPacienteCompletadas', () => {
+    it('debe retornar todas las sesiones completadas de un paciente sin paginación', async () => {
+      // Arrange
+      const idPaciente = 'uuid-paciente';
+
+      const mockSesiones = [
+        { idSesion: 1, estado: 'completado', idPaciente },
+        { idSesion: 2, estado: 'completado', idPaciente },
+      ];
+
+      mockNatsClient.send.mockReturnValueOnce(of({ 
+        usuarios: [{ rol: 'paciente', idUsuario: idPaciente }] 
+      }));
+
+      mockPrismaClient.sESION.findMany.mockResolvedValue(mockSesiones);
+
+      // Act
+      const resultado = await service.listarSesionesPacienteCompletadas(idPaciente);
+
+      // Assert
+      expect(resultado).toEqual(mockSesiones);
+      expect(mockPrismaClient.sESION.findMany).toHaveBeenCalledWith({
+        where: {
+          idPaciente,
+          estado: 'completado',
+        },
+      });
     });
   });
 
